@@ -1,14 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useAppStore, type SessionExerciseLog, type SetLog } from "@/store/useAppStore";
+import { useEffect, useRef, useState } from "react";
+import { useAppStore, type SessionExerciseLog, type SetLog, type SessionTag } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EXERCISES } from "@/data/exercises";
 import {
-  Check, ChevronLeft, ChevronUp, ChevronDown, X, Pause, Play,
-  SkipForward, RotateCcw, Plus, Minus, ListOrdered,
+  Check, ChevronLeft, ChevronUp, ChevronDown, X, Play,
+  SkipForward, RotateCcw, Plus, Minus, ListOrdered, Tag,
 } from "lucide-react";
-import { progressionHint } from "@/lib/trainer";
+import { analyzeSet, adaptiveRest, SESSION_TAGS } from "@/lib/setFeedback";
+import { computeSessionSummary } from "@/lib/sessionSummary";
+import { SessionSummaryScreen } from "@/components/SessionSummaryScreen";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -40,8 +42,11 @@ function WorkoutSession() {
     }))
   );
 
-  const [activeIdx, setActiveIdx] = useState(0); // pointer into `order`
+  const [activeIdx, setActiveIdx] = useState(0);
   const [showList, setShowList] = useState(false);
+  const [showSummary, setShowSummary] = useState<import("@/lib/sessionSummary").SessionSummary | null>(null);
+  const [sessionStartTime] = useState(() => Date.now());
+  const [lastFeedback, setLastFeedback] = useState<string | null>(null);
 
   // Rest timer
   const [rest, setRest] = useState<number | null>(null);
@@ -96,13 +101,38 @@ function WorkoutSession() {
   const completeSet = () => {
     if (currentSet === -1) return;
     setSet(exerciseIndex, currentSet, { done: true });
+
+    // Analyze the set for feedback
+    const completedSet = log.sets[currentSet];
+    const targetReps: [number, number] = (() => {
+      const parts = plan.reps.split("-").map(Number);
+      return [parts[0] ?? 8, parts[1] ?? 12];
+    })();
+    const previousSets = log.sets.filter((s, i) => i < currentSet && s.done);
+    const feedback = analyzeSet(completedSet, targetReps, previousSets, log.exerciseId);
+
+    // Show feedback message
+    setLastFeedback(feedback.message);
+    toast(feedback.message, {
+      duration: 3000,
+    });
+
+    // Apply next-set suggestion if available
+    if (feedback.nextSetSuggestion && currentSet < totalSets - 1) {
+      const nextSetIdx = currentSet + 1;
+      setSet(exerciseIndex, nextSetIdx, {
+        weight: feedback.nextSetSuggestion.weight,
+      });
+    }
+
     const isLastSet = currentSet === totalSets - 1;
     if (isLastSet) {
-      // auto-advance after a beat
       toast.success(`${ex.name} done!`);
       setTimeout(() => goNext(), 400);
     } else {
-      setRest(plan.restSec || DEFAULT_REST);
+      // Use adaptive rest based on RPE
+      const adaptiveRestTime = adaptiveRest(completedSet.rpe ?? 7, plan.restSec || DEFAULT_REST);
+      setRest(adaptiveRestTime);
     }
   };
 
@@ -152,20 +182,44 @@ function WorkoutSession() {
     setRest(null);
   };
 
-  const finish = () => {
+  const handleFinish = () => {
+    const durationMs = Date.now() - sessionStartTime;
+    const durationMin = Math.round(durationMs / (1000 * 60));
     const session = {
       id: `s-${Date.now()}`,
       dayId,
       date: new Date().toISOString(),
+      startedAt: new Date(sessionStartTime).toISOString(),
+      finishedAt: new Date().toISOString(),
+      durationMin,
       exercises: logs,
     };
+    // Compute summary before saving
+    const sessions = useAppStore.getState().sessions;
+    const summary = computeSessionSummary(session, day.exercises, sessions);
+    // Show summary screen
+    setShowSummary(summary);
+    // Save session (we'll handle tags in the summary finish)
     saveSession(session);
+  };
+
+  const handleSummaryFinish = (tags: SessionTag[]) => {
+    // Tags are saved with the session already
     toast.success("Workout saved", { description: "Great session 💪" });
     navigate({ to: "/" });
   };
 
   const hint = exerciseDone
-    ? progressionHint(plan.reps, log.sets.map(s => s.reps), log.sets[0]?.weight ?? 0)
+    ? (() => {
+        const doneSets = log.sets.filter(s => s.done);
+        if (doneSets.length === 0) return null;
+        const allHitTarget = doneSets.every(s => s.reps >= parseInt(plan.reps.split("-").pop() || "0"));
+        if (allHitTarget) {
+          const inc = (doneSets[0]?.weight ?? 20) >= 60 ? 2.5 : 1;
+          return { message: `All reps hit! Try +${inc}kg next session.` };
+        }
+        return { message: "Solid effort. Aim for top of rep range next time." };
+      })()
     : null;
 
   const setBeingLogged = currentSet === -1 ? totalSets - 1 : currentSet;
@@ -174,6 +228,11 @@ function WorkoutSession() {
   const bump = (field: "weight" | "reps", delta: number) => {
     setSet(exerciseIndex, setBeingLogged, { [field]: Math.max(0, activeSet[field] + delta) });
   };
+
+  // Show summary screen if workout is finished
+  if (showSummary) {
+    return <SessionSummaryScreen summary={showSummary} onFinish={handleSummaryFinish} />;
+  }
 
   return (
     <div className="min-h-dvh bg-background flex flex-col safe-pt">
@@ -252,7 +311,7 @@ function WorkoutSession() {
                 );
               })}
             </div>
-            <Button className="w-full mt-6 rounded-full" size="lg" onClick={finish}>
+            <Button className="w-full mt-6 rounded-full" size="lg" onClick={handleFinish}>
               Finish & save workout
             </Button>
           </div>
@@ -335,8 +394,13 @@ function WorkoutSession() {
             </div>
           )}
 
-          {/* Tips */}
-          {!exerciseDone && ex.tips[0] && (
+          {/* Tips or set feedback */}
+          {!exerciseDone && lastFeedback && (
+            <div className="mt-4 rounded-xl bg-primary/5 border border-primary/20 p-3 text-sm text-primary">
+              {lastFeedback}
+            </div>
+          )}
+          {!exerciseDone && !lastFeedback && ex.tips[0] && (
             <div className="mt-6 text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">Tip · </span>{ex.tips[0]}
             </div>
@@ -424,7 +488,7 @@ function WorkoutSession() {
       {(rest === null || rest === 0) && (
         <div className="fixed bottom-0 inset-x-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 safe-pb">
           <div className="app-shell px-4">
-            <Button variant="outline" size="lg" className="w-full rounded-full" onClick={finish}>
+            <Button variant="outline" size="lg" className="w-full rounded-full" onClick={handleFinish}>
               <Play className="size-4 rotate-90" /> Finish & save workout
             </Button>
           </div>
