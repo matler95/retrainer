@@ -17,6 +17,7 @@ import { Route as LibraryRouteImport } from './routes/library'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkoutDayIdRouteImport } from './routes/workout.$dayId'
 import { Route as LibraryExerciseIdRouteImport } from './routes/library.$exerciseId'
+import { Route as AuthStravaRouteImport } from './routes/auth.strava'
 import { Route as PlanDayDayIdRouteImport } from './routes/plan.day.$dayId'
 
 const ProgressRoute = ProgressRouteImport.update({
@@ -59,6 +60,11 @@ const LibraryExerciseIdRoute = LibraryExerciseIdRouteImport.update({
   path: '/$exerciseId',
   getParentRoute: () => LibraryRoute,
 } as any)
+const AuthStravaRoute = AuthStravaRouteImport.update({
+  id: '/auth/strava',
+  path: '/auth/strava',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlanDayDayIdRoute = PlanDayDayIdRouteImport.update({
   id: '/day/$dayId',
   path: '/day/$dayId',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/plan': typeof PlanRouteWithChildren
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
+  '/auth/strava': typeof AuthStravaRoute
   '/library/$exerciseId': typeof LibraryExerciseIdRoute
   '/workout/$dayId': typeof WorkoutDayIdRoute
   '/plan/day/$dayId': typeof PlanDayDayIdRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/plan': typeof PlanRouteWithChildren
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
+  '/auth/strava': typeof AuthStravaRoute
   '/library/$exerciseId': typeof LibraryExerciseIdRoute
   '/workout/$dayId': typeof WorkoutDayIdRoute
   '/plan/day/$dayId': typeof PlanDayDayIdRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/plan': typeof PlanRouteWithChildren
   '/profile': typeof ProfileRoute
   '/progress': typeof ProgressRoute
+  '/auth/strava': typeof AuthStravaRoute
   '/library/$exerciseId': typeof LibraryExerciseIdRoute
   '/workout/$dayId': typeof WorkoutDayIdRoute
   '/plan/day/$dayId': typeof PlanDayDayIdRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/profile'
     | '/progress'
+    | '/auth/strava'
     | '/library/$exerciseId'
     | '/workout/$dayId'
     | '/plan/day/$dayId'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/profile'
     | '/progress'
+    | '/auth/strava'
     | '/library/$exerciseId'
     | '/workout/$dayId'
     | '/plan/day/$dayId'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/plan'
     | '/profile'
     | '/progress'
+    | '/auth/strava'
     | '/library/$exerciseId'
     | '/workout/$dayId'
     | '/plan/day/$dayId'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   PlanRoute: typeof PlanRouteWithChildren
   ProfileRoute: typeof ProfileRoute
   ProgressRoute: typeof ProgressRoute
+  AuthStravaRoute: typeof AuthStravaRoute
   WorkoutDayIdRoute: typeof WorkoutDayIdRoute
 }
 
@@ -203,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LibraryExerciseIdRouteImport
       parentRoute: typeof LibraryRoute
     }
+    '/auth/strava': {
+      id: '/auth/strava'
+      path: '/auth/strava'
+      fullPath: '/auth/strava'
+      preLoaderRoute: typeof AuthStravaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/plan/day/$dayId': {
       id: '/plan/day/$dayId'
       path: '/day/$dayId'
@@ -241,6 +261,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlanRoute: PlanRouteWithChildren,
   ProfileRoute: ProfileRoute,
   ProgressRoute: ProgressRoute,
+  AuthStravaRoute: AuthStravaRoute,
   WorkoutDayIdRoute: WorkoutDayIdRoute,
 }
 export const routeTree = rootRouteImport
