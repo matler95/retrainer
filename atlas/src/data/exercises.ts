@@ -7,6 +7,31 @@ export type Equipment =
 
 export type Difficulty = "beginner" | "intermediate" | "advanced";
 
+/**
+ * Exercise category for classification and substitution logic.
+ */
+export type ExerciseCategory = "compound" | "isolation" | "cardio" | "mobility";
+
+/**
+ * Movement mechanic classification.
+ */
+export type Mechanic = "push" | "pull" | "hinge" | "squat" | "carry" | "rotation" | "static";
+
+/**
+ * Movement plane classification.
+ */
+export type Plane = "sagittal" | "frontal" | "transverse";
+
+/**
+ * Force type classification.
+ */
+export type ForceType = "concentric" | "eccentric" | "isometric";
+
+/**
+ * Muscle activation level for each muscle group involved.
+ */
+export type ActivationLevel = "primary" | "secondary" | "stabilizer";
+
 export interface Exercise {
   id: string;
   name: string;
@@ -21,6 +46,25 @@ export interface Exercise {
   defaultReps: string; // "8-12"
   restSec: number;
   progression: string;
+  // ── Extended fields (Sprint 1 additions) ──
+  /** YouTube embed ID for exercise demo video */
+  videoUrl?: string;
+  /** Movement cues for real-time feedback */
+  cues?: string[];
+  /** Detailed muscle activation map */
+  muscleActivation?: Partial<Record<MuscleGroup, ActivationLevel>>;
+  /** Exercise category */
+  category?: ExerciseCategory;
+  /** Whether this is a unilateral (single-limb) exercise */
+  unilateral?: boolean;
+  /** Movement mechanic classification */
+  mechanic?: Mechanic;
+  /** Movement plane */
+  plane?: Plane;
+  /** Force type */
+  forceType?: ForceType;
+  /** Exercise IDs that can substitute for this one */
+  substituteIds?: string[];
 }
 
 const ex = (e: Exercise) => e;

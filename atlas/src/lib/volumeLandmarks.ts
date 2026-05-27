@@ -15,7 +15,10 @@ import type { Session, SessionExerciseLog, SetLog } from "@/store/useAppStore";
 import type { MuscleGroup } from "@/data/exercises";
 import { EXERCISES } from "@/data/exercises";
 
-export type Experience = "beginner" | "intermediate" | "advanced";
+import type { Experience } from "@/data/types";
+
+// Re-export for backward compatibility
+export type { Experience };
 
 export interface VolumeLandmarks {
   /** Minimum Effective Volume — minimum weekly sets for growth */

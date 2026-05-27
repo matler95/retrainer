@@ -1,39 +1,47 @@
-// Coach — Personal Trainer Service Worker
-// Cache-first strategy for app shell, network-first for dynamic data.
+/**
+ * Atlas Service Worker
+ *
+ * Caching strategy:
+ * - Static assets (JS, CSS, fonts) → Cache-first
+ * - Exercise database → Cache-first (rarely changes)
+ * - Supabase API calls → Network-first with cache fallback
+ * - Navigation requests → Network-first (serve fresh HTML)
+ */
 
-const CACHE_NAME = "coach-cache-v1";
-const STATIC_ASSETS = [
+const CACHE_NAME = "atlas-v1";
+const STATIC_CACHE = "atlas-static-v1";
+
+// Assets to pre-cache on install
+const PRECACHE_URLS = [
   "/",
-  "/index.html",
+  "/manifest.json",
 ];
 
-// Install — pre-cache essential assets
+// Install: pre-cache critical assets
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }),
+    caches.open(STATIC_CACHE).then((cache) => {
+      return cache.addAll(PRECACHE_URLS);
+    })
   );
-  // Activate immediately — don't wait for page refresh
   self.skipWaiting();
 });
 
-// Activate — clean old caches
+// Activate: clean up old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key)),
+        cacheNames
+          .filter((name) => name !== CACHE_NAME && name !== STATIC_CACHE)
+          .map((name) => caches.delete(name))
       );
-    }),
+    })
   );
-  // Take control of all pages immediately
   self.clients.claim();
 });
 
-// Fetch — cache-first for static, network-first for API calls
+// Fetch: apply caching strategy based on request type
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -41,15 +49,38 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (request.method !== "GET") return;
 
-  // Skip Supabase API calls — let them go to network
+  // Supabase API calls: network-first with cache fallback
   if (url.hostname.includes("supabase")) {
     event.respondWith(networkFirst(request));
     return;
   }
 
-  // Cache-first for all other requests (app shell, assets, data)
-  event.respondWith(cacheFirst(request));
+  // Static assets (JS, CSS, images, fonts): cache-first
+  if (
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".woff2") ||
+    url.pathname.endsWith(".woff") ||
+    url.pathname.endsWith(".png") ||
+    url.pathname.endsWith(".svg") ||
+    url.pathname.endsWith(".ico") ||
+    url.pathname.includes("/icons/")
+  ) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
+
+  // Navigation requests (HTML): network-first
+  if (request.mode === "navigate") {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  // Everything else: stale-while-revalidate
+  event.respondWith(staleWhileRevalidate(request));
 });
+
+// ─── Caching Strategies ─────────────────────────────────────────────────────
 
 async function cacheFirst(request) {
   const cached = await caches.match(request);
@@ -57,19 +88,13 @@ async function cacheFirst(request) {
 
   try {
     const response = await fetch(request);
-    // Only cache valid responses
     if (response.ok) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }
     return response;
-  } catch (error) {
-    // Offline fallback — return cached index for navigation requests
-    if (request.mode === "navigate") {
-      const cachedIndex = await caches.match("/");
-      if (cachedIndex) return cachedIndex;
-    }
-    throw error;
+  } catch {
+    return new Response("Offline", { status: 503 });
   }
 }
 
@@ -81,9 +106,23 @@ async function networkFirst(request) {
       cache.put(request, response.clone());
     }
     return response;
-  } catch (error) {
+  } catch {
     const cached = await caches.match(request);
     if (cached) return cached;
-    throw error;
+    return new Response("Offline", { status: 503 });
   }
+}
+
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+
+  const fetchPromise = fetch(request).then((response) => {
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  }).catch(() => cached);
+
+  return cached || fetchPromise;
 }

@@ -1,9 +1,14 @@
 {
-  "name": "Coach — Personal Trainer",
-  "short_name": "Coach",
-  "description": "Personalized workouts, progress tracking, and coaching.",
+  "name": "Atlas — Smart Personal Trainer",
+  "short_name": "Atlas",
+  "description": "Your AI-free smart personal trainer. Personalized workouts, intelligent progression, and progress tracking.",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay"],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "background_color": "#ffffff",
   "theme_color": "#1a1a1a",
   "orientation": "portrait",
@@ -29,5 +34,18 @@
     }
   ],
   "categories": ["health", "fitness", "lifestyle"],
-  "lang": "en"
+  "lang": "en",
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "image",
+          "accept": ["image/*"]
+        }
+      ]
+    }
+  }
 }

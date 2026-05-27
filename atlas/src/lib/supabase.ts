@@ -7,10 +7,11 @@
  * - When online + authenticated, local data syncs to Supabase.
  * - When offline, app works normally with Zustand persist.
  * - All functions degrade gracefully when Supabase is not configured.
+ * - Per-table sync with RLS for security and efficiency.
  */
 
 import { createClient } from "@supabase/supabase-js";
-import type { Session, BodyWeightLog, Profile, PlanDay } from "@/store/useAppStore";
+import type { Session, BodyWeightLog, Profile, PlanDay } from "@/data/types";
 
 // ─── Supabase Client ─────────────────────────────────────────────────────────
 
@@ -94,26 +95,13 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
-// ─── Sync Types ──────────────────────────────────────────────────────────────
+// ─── Per-Table Sync Types ────────────────────────────────────────────────────
 
 /**
- * Shape of the user_data table for storing app state in Supabase.
- * Each row is a user's entire state snapshot.
+ * Shape of the user_data table (legacy — for migration from old schema).
+ * New code should use per-table sync functions below.
  *
- * Table schema (create in Supabase dashboard):
- *   CREATE TABLE user_data (
- *     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
- *     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
- *     profile JSONB,
- *     plan JSONB,
- *     sessions JSONB,
- *     body_weight JSONB,
- *     favorites TEXT[],
- *     disliked TEXT[],
- *     created_at TIMESTAMPTZ DEFAULT now(),
- *     updated_at TIMESTAMPTZ DEFAULT now(),
- *     UNIQUE(user_id)
- *   );
+ * @deprecated Use per-table sync instead.
  */
 export interface UserDataRow {
   user_id: string;
@@ -125,81 +113,11 @@ export interface UserDataRow {
   disliked: string[];
 }
 
-// ─── Sync Helpers ────────────────────────────────────────────────────────────
-
-/**
- * Push the current user's app state to Supabase.
- * This is the "save" direction — local → cloud.
- *
- * Called after:
- * - Profile/plan changes
- * - Session completion
- * - Body weight logging
- * - Favorite/dislike toggles
- *
- * @param userId - Authenticated user's ID
- * @param data - Current app state to sync
- */
-export async function syncToSupabase(
-  userId: string,
-  data: UserDataRow,
-): Promise<void> {
-  if (!supabase) return;
-
-  const { error } = await supabase.from("user_data").upsert(
-    {
-      user_id: userId,
-      profile: data.profile,
-      plan: data.plan,
-      sessions: data.sessions,
-      body_weight: data.body_weight,
-      favorites: data.favorites,
-      disliked: data.disliked,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  );
-
-  if (error) {
-    console.warn("Supabase sync failed:", error.message);
-    // Don't throw — sync is best-effort
-  }
-}
-
-/**
- * Load the user's app state from Supabase.
- * This is the "load" direction — cloud → local.
- *
- * Called on app startup when the user is authenticated.
- * Returns null if no data exists, or if Supabase is not configured.
- *
- * @param userId - Authenticated user's ID
- */
-export async function loadFromSupabase(
-  userId: string,
-): Promise<UserDataRow | null> {
-  if (!supabase) return null;
-
-  const { data, error } = await supabase
-    .from("user_data")
-    .select("*")
-    .eq("user_id", userId)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null; // Not found — first time
-    console.warn("Supabase load failed:", error.message);
-    return null;
-  }
-
-  return data as unknown as UserDataRow;
-}
-
 // ─── Generic Table Helpers ───────────────────────────────────────────────────
 
 /**
  * Upsert a row into any table.
- * Use this for custom sync operations beyond the standard user_data table.
+ * Uses Supabase's upsert with conflict resolution for idempotency.
  */
 export async function upsertRow<T extends Record<string, unknown>>(
   table: string,
@@ -230,7 +148,82 @@ export async function fetchRows<T = Record<string, unknown>>(
   return (data ?? []) as T[];
 }
 
-// ─── Future AI Integration Points ─────────────────────────────────────────────
-// TODO: When adding AI-powered features (e.g. chat, form suggestions),
-// create a supabase.functions.invoke wrapper here.
-// The functions would be deployed as Supabase Edge Functions.
+/**
+ * Fetch a single row by user_id.
+ */
+export async function fetchSingle<T = Record<string, unknown>>(
+  table: string,
+  userId: string,
+): Promise<T | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from(table)
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+  if (error) {
+    if (error.code === "PGRST116") return null; // Not found
+    throw error;
+  }
+  return data as T;
+}
+
+// ─── Legacy Sync (backward compatibility) ────────────────────────────────────
+
+/**
+ * Push the current user's app state to Supabase (legacy single-table approach).
+ *
+ * @deprecated Use per-table sync via syncQueue.ts instead.
+ * Kept for backward compatibility during migration.
+ */
+export async function syncToSupabase(
+  userId: string,
+  data: UserDataRow,
+): Promise<void> {
+  if (!supabase) return;
+
+  const { error } = await supabase.from("user_data").upsert(
+    {
+      user_id: userId,
+      profile: data.profile,
+      plan: data.plan,
+      sessions: data.sessions,
+      body_weight: data.body_weight,
+      favorites: data.favorites,
+      disliked: data.disliked,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (error) {
+    console.warn("Supabase sync failed:", error.message);
+    // Don't throw — sync is best-effort
+  }
+}
+
+/**
+ * Load the user's app state from Supabase (legacy single-table approach).
+ *
+ * @deprecated Use per-table fetch via fetchRows/fetchSingle instead.
+ * Kept for backward compatibility during migration.
+ */
+export async function loadFromSupabase(
+  userId: string,
+): Promise<UserDataRow | null> {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("user_data")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null; // Not found
+    console.warn("Supabase load failed:", error.message);
+    return null;
+  }
+
+  return data as unknown as UserDataRow;
+}

@@ -1,5 +1,7 @@
-export type Experience = "beginner" | "intermediate" | "advanced";
-export type Goal = "lose fat" | "build muscle" | "strength" | "general fitness" | "recomposition";
+import type { Experience, Goal } from "@/data/types";
+
+// Re-export for backward compatibility
+export type { Experience, Goal };
 
 export type PeriodizationPhase = "accumulation" | "intensification" | "realization" | "deload";
 
