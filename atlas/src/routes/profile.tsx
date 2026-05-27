@@ -1,10 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppShell, AppHeader, Card, SectionTitle } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAppStore } from "@/store/useAppStore";
-import { Moon, Sun, Bell, RefreshCw, LogOut, ChevronRight, Apple, Mail } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Moon, Sun, Bell, RefreshCw, LogOut, ChevronRight, Mail, Cloud, CloudOff, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -37,6 +39,39 @@ function ProfilePage() {
     </AppShell>
   );
 
+  const { user, status, isConfigured, signIn, signUp, signOut, syncNow } = useAuth();
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isAuthMode, setIsAuthMode] = useState<"signin" | "signup">("signin");
+  const [syncing, setSyncing] = useState(false);
+
+  const handleAuth = async () => {
+    setAuthError("");
+    try {
+      if (isAuthMode === "signin") {
+        await signIn(authEmail, authPassword);
+      } else {
+        await signUp(authEmail, authPassword);
+      }
+      setAuthEmail("");
+      setAuthPassword("");
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : "Authentication failed");
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await syncNow();
+      // Brief success indicator
+      setTimeout(() => setSyncing(false), 1000);
+    } catch {
+      setSyncing(false);
+    }
+  };
+
   return (
     <AppShell>
       <AppHeader title="Profile" />
@@ -52,8 +87,76 @@ function ProfilePage() {
 
       <SectionTitle>Account</SectionTitle>
       <Card>
-        <Button variant="outline" className="w-full justify-start" disabled><Mail className="size-4" /> Sign in with email <span className="ml-auto text-xs text-muted-foreground">Coming soon</span></Button>
-        <Button variant="outline" className="w-full justify-start mt-2" disabled><Apple className="size-4" /> Sign in with Apple <span className="ml-auto text-xs text-muted-foreground">Coming soon</span></Button>
+        {status === "loading" ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : user ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Mail className="size-4 text-muted-foreground" />
+              <span>{user.email}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Cloud className="size-4" />
+              <span>Cloud sync active</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                {syncing ? <Loader2 className="size-4 animate-spin" /> : <CloudOff className="size-4" />}
+                {syncing ? "Syncing..." : "Sync now"}
+              </Button>
+              <Button size="sm" variant="outline" className="flex-1 text-destructive" onClick={signOut}>
+                <LogOut className="size-4" /> Sign out
+              </Button>
+            </div>
+          </div>
+        ) : isConfigured ? (
+          <div className="space-y-3">
+            <div className="flex gap-1 text-xs text-muted-foreground mb-1">
+              <button
+                onClick={() => setIsAuthMode("signin")}
+                className={`px-2 py-0.5 rounded ${isAuthMode === "signin" ? "bg-primary/10 text-primary" : ""}`}
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => setIsAuthMode("signup")}
+                className={`px-2 py-0.5 rounded ${isAuthMode === "signup" ? "bg-primary/10 text-primary" : ""}`}
+              >
+                Sign up
+              </button>
+            </div>
+            <Input
+              type="email"
+              placeholder="Email"
+              value={authEmail}
+              onChange={e => setAuthEmail(e.target.value)}
+            />
+            <Input
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleAuth()}
+            />
+            {authError && <p className="text-xs text-destructive">{authError}</p>}
+            <Button size="sm" className="w-full" onClick={handleAuth} disabled={!authEmail || !authPassword}>
+              {isAuthMode === "signin" ? "Sign in" : "Sign up"}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <CloudOff className="size-4" />
+            <span>Cloud sync available with Supabase credentials</span>
+          </div>
+        )}
       </Card>
 
       <SectionTitle>Plan</SectionTitle>

@@ -1,40 +1,50 @@
-import { createClient } from "@supabase/supabase-js";
-
 /**
- * Supabase client singleton.
- * Uses Vite environment variables for configuration.
- * In offline mode (no env vars), returns a no-op client that gracefully degrades.
+ * Supabase client singleton with auth helpers and sync utilities.
+ *
+ * DESIGN PRINCIPLES:
+ * - Offline-first: The app works without Supabase. Auth is optional.
+ * - Zustand is source of truth. Supabase is persistence/sync layer.
+ * - When online + authenticated, local data syncs to Supabase.
+ * - When offline, app works normally with Zustand persist.
+ * - All functions degrade gracefully when Supabase is not configured.
  */
 
-// These would be set in .env / .env.local
+import { createClient } from "@supabase/supabase-js";
+import type { Session, BodyWeightLog, Profile, PlanDay } from "@/store/useAppStore";
+
+// ─── Supabase Client ─────────────────────────────────────────────────────────
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
 
 const isConfigured = SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
 
 /**
- * Supabase client — or a mock that throws helpful messages when used without env vars.
- * Check `isSupabaseConfigured()` before making API calls so the app degrades gracefully
- * when Supabase is not set up (local-first mode).
+ * Supabase client — or null when not configured.
+ * Check `isSupabaseConfigured()` before making API calls.
  */
 export const supabase = isConfigured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
 
 /**
- * Returns true when the Supabase environment variables have been set.
+ * Returns true when Supabase environment variables are set.
  * Use this to conditionally show auth UI or cloud-sync features.
  */
 export function isSupabaseConfigured(): boolean {
   return isConfigured;
 }
 
-// ─── Auth helpers ────────────────────────────────────────────────────────────
+// ─── Auth Types ──────────────────────────────────────────────────────────────
 
-export type AuthUser = {
+export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+export interface AuthUser {
   id: string;
   email: string | null;
-};
+}
+
+// ─── Auth Helpers ────────────────────────────────────────────────────────────
 
 /**
  * Get the current authenticated user (if any).
@@ -45,6 +55,16 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
   return { id: data.user.id, email: data.user.email ?? null };
+}
+
+/**
+ * Get the current auth session.
+ * Returns null when Supabase is not configured or no session exists.
+ */
+export async function getCurrentSession() {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  return data.session;
 }
 
 /**
@@ -59,7 +79,6 @@ export async function signIn(email: string, password: string) {
 
 /**
  * Sign up with email + password.
- * Throws a user-friendly message if Supabase is not configured.
  */
 export async function signUp(email: string, password: string) {
   if (!supabase) throw new Error("Supabase is not configured.");
@@ -75,12 +94,112 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
-// ─── Sync helpers ────────────────────────────────────────────────────────────
+// ─── Sync Types ──────────────────────────────────────────────────────────────
 
 /**
- * Upsert a row into a table.
- * Uses the user_id column for RLS — ensure your Supabase tables have a `user_id` column.
- * This is a generic helper; specific sync operations should use typed queries.
+ * Shape of the user_data table for storing app state in Supabase.
+ * Each row is a user's entire state snapshot.
+ *
+ * Table schema (create in Supabase dashboard):
+ *   CREATE TABLE user_data (
+ *     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ *     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+ *     profile JSONB,
+ *     plan JSONB,
+ *     sessions JSONB,
+ *     body_weight JSONB,
+ *     favorites TEXT[],
+ *     disliked TEXT[],
+ *     created_at TIMESTAMPTZ DEFAULT now(),
+ *     updated_at TIMESTAMPTZ DEFAULT now(),
+ *     UNIQUE(user_id)
+ *   );
+ */
+export interface UserDataRow {
+  user_id: string;
+  profile: Profile | null;
+  plan: PlanDay[];
+  sessions: Session[];
+  body_weight: BodyWeightLog[];
+  favorites: string[];
+  disliked: string[];
+}
+
+// ─── Sync Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Push the current user's app state to Supabase.
+ * This is the "save" direction — local → cloud.
+ *
+ * Called after:
+ * - Profile/plan changes
+ * - Session completion
+ * - Body weight logging
+ * - Favorite/dislike toggles
+ *
+ * @param userId - Authenticated user's ID
+ * @param data - Current app state to sync
+ */
+export async function syncToSupabase(
+  userId: string,
+  data: UserDataRow,
+): Promise<void> {
+  if (!supabase) return;
+
+  const { error } = await supabase.from("user_data").upsert(
+    {
+      user_id: userId,
+      profile: data.profile,
+      plan: data.plan,
+      sessions: data.sessions,
+      body_weight: data.body_weight,
+      favorites: data.favorites,
+      disliked: data.disliked,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (error) {
+    console.warn("Supabase sync failed:", error.message);
+    // Don't throw — sync is best-effort
+  }
+}
+
+/**
+ * Load the user's app state from Supabase.
+ * This is the "load" direction — cloud → local.
+ *
+ * Called on app startup when the user is authenticated.
+ * Returns null if no data exists, or if Supabase is not configured.
+ *
+ * @param userId - Authenticated user's ID
+ */
+export async function loadFromSupabase(
+  userId: string,
+): Promise<UserDataRow | null> {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("user_data")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null; // Not found — first time
+    console.warn("Supabase load failed:", error.message);
+    return null;
+  }
+
+  return data as unknown as UserDataRow;
+}
+
+// ─── Generic Table Helpers ───────────────────────────────────────────────────
+
+/**
+ * Upsert a row into any table.
+ * Use this for custom sync operations beyond the standard user_data table.
  */
 export async function upsertRow<T extends Record<string, unknown>>(
   table: string,
@@ -96,7 +215,7 @@ export async function upsertRow<T extends Record<string, unknown>>(
 }
 
 /**
- * Fetch rows for the current user.
+ * Fetch rows for the current user from any table.
  */
 export async function fetchRows<T = Record<string, unknown>>(
   table: string,
@@ -111,6 +230,7 @@ export async function fetchRows<T = Record<string, unknown>>(
   return (data ?? []) as T[];
 }
 
-// ─── TODO: Future AI integration point ───────────────────────────────────────
-// When adding AI-powered features (e.g. chat, form suggestions),
+// ─── Future AI Integration Points ─────────────────────────────────────────────
+// TODO: When adding AI-powered features (e.g. chat, form suggestions),
 // create a supabase.functions.invoke wrapper here.
+// The functions would be deployed as Supabase Edge Functions.

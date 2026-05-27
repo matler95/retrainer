@@ -1,12 +1,13 @@
 /**
  * Hook: useReadiness
  *
- * Wraps the fatigue model (ACWR, readiness score, CNS demand) into a
- * convenient React hook that any component can use to surface training
+ * Wraps the fatigue model (ACWR, readiness score, CNS demand, deload detection)
+ * into a convenient React hook that any component can use to surface training
  * readiness to the user.
  *
  * WHY: Keeping this logic in a hook keeps components clean and makes
- * the readiness signal testable.
+ * the readiness signal testable. The hook recomputes automatically whenever
+ * sessions change (via useMemo dependency on sessions).
  */
 
 import { useMemo } from "react";
@@ -14,11 +15,13 @@ import { useAppStore } from "@/store/useAppStore";
 import {
   computeAcwr,
   computeSessionLoad,
+  computeSessionCnsDemand,
   readinessScore,
+  checkDeloadNeeded,
+  getWorkoutRecommendation,
+  type WorkloadRecommendation,
+  type DeloadRecommendation,
 } from "@/lib/fatigueModel";
-import { EXERCISES } from "@/data/exercises";
-import type { Exercise } from "@/data/exercises";
-
 export interface ReadinessState {
   /** 0–100 readiness score */
   score: number;
@@ -34,67 +37,12 @@ export interface ReadinessState {
   needsDeload: boolean;
   /** Whether the user can push harder */
   canPush: boolean;
-}
-
-/**
- * CNS demand rating for exercises.
- * Heavier compound lifts tax the CNS more than isolation.
- * This is used to weight fatigue more heavily for CNS-intensive sessions.
- */
-const CNS_DEMAND: Record<string, number> = {
-  squat: 1.0,
-  deadlift: 1.0,
-  "bench-press": 0.8,
-  ohp: 0.8,
-  pullup: 0.7,
-  "barbell-row": 0.7,
-  dips: 0.6,
-  "hip-thrust": 0.6,
-  "leg-press": 0.5,
-  lunge: 0.5,
-  rdl: 0.6,
-  "lat-pulldown": 0.4,
-  "db-row": 0.4,
-  "db-bench": 0.5,
-  "db-shoulder": 0.5,
-  "lateral-raise": 0.2,
-  "bb-curl": 0.2,
-  "db-curl": 0.2,
-  "hammer-curl": 0.2,
-  "tricep-pushdown": 0.2,
-  skullcrusher: 0.2,
-  "goblet-squat": 0.4,
-  "calf-raise": 0.1,
-  plank: 0.1,
-  "hanging-leg-raise": 0.2,
-  "ab-wheel": 0.2,
-  pushup: 0.3,
-  "incline-db": 0.5,
-  burpee: 0.6,
-  "kb-swing": 0.5,
-  "glute-bridge": 0.2,
-};
-
-/**
- * Get the CNS demand weight for a session.
- * Higher values = more CNS fatigue.
- */
-export function computeSessionCnsDemand(
-  exercises: { exerciseId: string; sets: { done: boolean }[] }[],
-  exercisesDb: Exercise[],
-): number {
-  let totalDemand = 0;
-
-  for (const log of exercises) {
-    const ex = exercisesDb.find((e) => e.id === log.exerciseId);
-    if (!ex) continue;
-
-    const demand = CNS_DEMAND[log.exerciseId] ?? 0.3;
-    const doneSets = log.sets.filter((s) => s.done).length;
-    totalDemand += demand * doneSets;
-  }
-
-  return totalDemand;
+  /** CNS load for the current week */
+  weekCnsLoad: number;
+  /** Deload-specific recommendation (if applicable) */
+  deloadRecommendation: DeloadRecommendation | null;
+  /** Workload adjustment recommendation */
+  workloadRecommendation: WorkloadRecommendation;
 }
 
 /**
@@ -140,32 +88,36 @@ export function useReadiness(): ReadinessState {
         : 0;
 
     // Compute CNS demand from last 7 days
-    const cnsLoad = last7Sessions.reduce(
-      (sum, s) =>
-        sum + computeSessionCnsDemand(s.exercises, EXERCISES),
+    const weekCnsLoad = last7Sessions.reduce(
+      (sum, s) => sum + computeSessionCnsDemand(s.exercises),
       0,
     );
 
     // Adjust ACWR threshold for high CNS demand
-    const adjustedAcwr = acwr + cnsLoad * 0.05; // CNS adds a small penalty
+    const adjustedAcwr = acwr + weekCnsLoad * 0.05; // CNS adds a small penalty
     const finalScore = readinessScore(adjustedAcwr, avgRpe);
+
+    // Check deload need
+    const deloadRecommendation = checkDeloadNeeded(
+      adjustedAcwr,
+      finalScore,
+      weekCnsLoad,
+      0, // consecutiveDecliningSessions — would need e1RM trend data
+    );
+
+    // Get workload recommendation
+    const workloadRecommendation = getWorkoutRecommendation(
+      finalScore,
+      adjustedAcwr,
+    );
 
     // Generate recommendation
     let recommendation: string;
-    const needsDeload = finalScore < 50 || adjustedAcwr > 1.5;
+    const needsDeload = deloadRecommendation.shouldDeload;
     const canPush = finalScore >= 80 && adjustedAcwr < 1.0;
 
     if (needsDeload) {
-      if (adjustedAcwr > 1.5) {
-        recommendation =
-          "Your training load has spiked recently. Consider a deload week to reset fatigue.";
-      } else if (cnsLoad > 10) {
-        recommendation =
-          "High CNS demand detected. Your nervous system needs recovery — try a lighter session.";
-      } else {
-        recommendation =
-          "Readiness is low. Take an extra rest day or do light activity.";
-      }
+      recommendation = deloadRecommendation.reason;
     } else if (canPush) {
       recommendation =
         "You're well-recovered. Now's a great time to push for a PR or add volume.";
@@ -173,8 +125,7 @@ export function useReadiness(): ReadinessState {
       recommendation =
         "You're ready to train. Follow your plan and listen to your body.";
     } else {
-      recommendation =
-        "Moderate readiness. You can train, but keep RPE in check (≤7).";
+      recommendation = workloadRecommendation.message;
     }
 
     return {
@@ -185,6 +136,9 @@ export function useReadiness(): ReadinessState {
       recommendation,
       needsDeload,
       canPush,
+      weekCnsLoad: Math.round(weekCnsLoad * 100) / 100,
+      deloadRecommendation: needsDeload ? deloadRecommendation : null,
+      workloadRecommendation,
     };
   }, [sessions]);
 }

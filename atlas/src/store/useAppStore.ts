@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import { EXERCISES, type Equipment, type MuscleGroup } from "@/data/exercises";
 import { buildAchievementContext, checkNewAchievements, ACHIEVEMENTS } from "@/lib/achievements";
 import { showAchievementNotification } from "@/lib/notifications";
-import { createPeriodizationBlocks, getCurrentBlock, formatRepRange, type TrainingBlock } from "@/lib/periodization";
+import { createPeriodizationBlocks, getCurrentBlock, formatRepRange, type TrainingBlock, type UndulatingBlock } from "@/lib/periodization";
 import { getVolumeLandmarks } from "@/lib/volumeLandmarks";
 import { pickTopScored } from "@/lib/exerciseScorer";
 import type { Exercise } from "@/data/exercises";
@@ -50,21 +50,46 @@ const DAY_MUSCLE_MAP: Record<string, MuscleGroup[][]> = {
  * - Exercise scoring (equipment, injury, preference, experience, variety)
  * - Periodization-aware rep ranges (accumulation = higher reps, etc.)
  * - Volume landmarks (MEV/MAV/MRV) for set counts
- * - Muscle coverage balancing
+ * - Muscle coverage balancing (via DAY_MUSCLE_MAP)
+ * - Undulating periodization support (per-session rep ranges)
+ * - User preferences (favorites/disliked) for better exercise selection
  *
  * @param profile - User's profile and preferences
  * @param blocks - Periodization training blocks
  * @param weekNumber - Current week (0-indexed) for phase lookup
+ * @param options - Optional overrides for favorites, disliked, undulating blocks
  */
 function generateEnhancedPlan(
   profile: Profile,
   blocks: TrainingBlock[],
   weekNumber: number,
+  options?: {
+    favorites?: string[];
+    disliked?: string[];
+    undulatingBlocks?: UndulatingBlock[];
+    sessionIndex?: number; // Which session within the week (0-indexed)
+  },
 ): PlanDay[] {
   const currentBlock = getCurrentBlock(blocks, weekNumber);
-  const repRange = currentBlock.repRange;
-  const repStr = formatRepRange(repRange);
   const setModifier = currentBlock.setCountModifier;
+
+  // Determine rep range — use undulating per-session range if available
+  const repRange: [number, number] = (() => {
+    if (
+      options?.undulatingBlocks &&
+      options.sessionIndex !== undefined &&
+      options.sessionIndex >= 0
+    ) {
+      const undBlock = options.undulatingBlocks.find(
+        (b) => b.phase === currentBlock.phase,
+      );
+      if (undBlock && options.sessionIndex < undBlock.sessionRepRanges.length) {
+        return undBlock.sessionRepRanges[options.sessionIndex];
+      }
+    }
+    return currentBlock.repRange;
+  })();
+  const repStr = formatRepRange(repRange);
 
   // Filter usable exercises once
   const usable = EXERCISES.filter((e) =>
@@ -75,10 +100,12 @@ function generateEnhancedPlan(
   );
 
   // Build a profile with favorites/disliked for the scorer
-  const scoreProfile = profile as Profile & { favorites: string[]; disliked: string[] };
-  // We need to access from the store, but this is a pure function — provide fallbacks
-  scoreProfile.favorites = [];
-  scoreProfile.disliked = [];
+  // Uses a safe spread copy — never mutates the original profile
+  const scoreProfile = {
+    ...profile,
+    favorites: options?.favorites ?? [],
+    disliked: options?.disliked ?? [],
+  } as Profile & { favorites: string[]; disliked: string[] };
 
   const day = (id: string, name: string, exs: PlannedExercise[]): PlanDay => ({
     id,
@@ -87,21 +114,43 @@ function generateEnhancedPlan(
   });
 
   /**
+   * Get the muscle groups that still need coverage for a given day.
+   * Uses DAY_MUSCLE_MAP to determine which muscle groups are primary
+   * for the current workout style and day index.
+   */
+  const getNeededMuscles = (style: Style, dayIndex: number): MuscleGroup[] => {
+    const template = DAY_MUSCLE_MAP[style];
+    if (!template || dayIndex >= template.length) return [];
+    return template[dayIndex];
+  };
+
+  /**
+   * Get the default exercise count for a muscle group.
+   * Uses DEFAULT_EXERCISES_PER_MUSCLE as baseline.
+   */
+  const getExerciseCount = (muscle: MuscleGroup, dayIndex: number): number => {
+    return DEFAULT_EXERCISES_PER_MUSCLE[muscle] ?? 1;
+  };
+
+  /**
    * Scored pick: picks top N scored exercises for a muscle group,
-   * respecting already-selected exercises for variety.
+   * respecting already-selected exercises for variety AND muscle coverage needs.
    */
   const scoredPick = (
     muscle: MuscleGroup,
     count: number,
     alreadySelected: string[],
+    dayIndex: number,
   ): PlannedExercise[] => {
+    const neededMuscles = getNeededMuscles(profile.style, dayIndex);
+
     const picked = pickTopScored(
       usable,
       muscle,
       scoreProfile,
       count,
       alreadySelected,
-      [], // neededMuscles — recalculated per day
+      neededMuscles,
     );
 
     // Calculate target sets based on volume landmarks
@@ -124,23 +173,18 @@ function generateEnhancedPlan(
   const style = profile.style;
 
   if (style === "push/pull/legs") {
-    const base = [
-      day(
-        "d1",
-        "Push",
-        scoredPick("chest", 2, []),
-      ),
-      day(
-        "d2",
-        "Pull",
-        scoredPick("back", 3, []),
-      ),
-      day(
-        "d3",
-        "Legs",
-        scoredPick("legs", 3, []),
-      ),
-    ];
+    const muscleMap = DAY_MUSCLE_MAP["push/pull/legs"];
+    const base = muscleMap.map((muscles, i) => {
+      const dayNames = ["Push", "Pull", "Legs"];
+      const name = dayNames[i] ?? `Day ${i + 1}`;
+      return day(
+        `d${i + 1}`,
+        name,
+        muscles.flatMap((m) =>
+          scoredPick(m as MuscleGroup, getExerciseCount(m as MuscleGroup, i), [], i),
+        ),
+      );
+    });
     return base.slice(0, Math.max(3, days)).concat(
       days > 3
         ? base.slice(0, days - 3).map((d, i) => ({
@@ -153,16 +197,25 @@ function generateEnhancedPlan(
   }
 
   if (style === "upper/lower") {
-    const base = [
-      day("d1", "Upper", scoredPick("chest", 2, [])),
-      day("d2", "Lower", scoredPick("legs", 3, [])),
-    ];
+    const muscleMap = DAY_MUSCLE_MAP["upper/lower"];
+    const base = muscleMap.map((muscles, i) => {
+      const dayNames = ["Upper", "Lower"];
+      const name = dayNames[i] ?? `Day ${i + 1}`;
+      return day(
+        `d${i + 1}`,
+        name,
+        muscles.flatMap((m) =>
+          scoredPick(m as MuscleGroup, getExerciseCount(m as MuscleGroup, i), [], i),
+        ),
+      );
+    });
     const out: PlanDay[] = [];
     for (let i = 0; i < days; i++) {
+      const sourceDay = base[i % base.length];
       out.push({
-        ...base[i % 2],
+        ...sourceDay,
         id: `d${i + 1}`,
-        name: `${base[i % 2].name} ${Math.floor(i / 2) + 1}`,
+        name: `${sourceDay.name} ${Math.floor(i / base.length) + 1}`,
       });
     }
     return out;
@@ -177,16 +230,20 @@ function generateEnhancedPlan(
       ["Arms", ["biceps", "triceps"]],
     ];
     return split.slice(0, days).map((s, i) =>
-      day(`d${i + 1}`, s[0], s[1].flatMap((m) => scoredPick(m, 2, []))),
+      day(
+        `d${i + 1}`,
+        s[0],
+        s[1].flatMap((m) => scoredPick(m, getExerciseCount(m, i), [], i)),
+      ),
     );
   }
 
   if (style === "strength focused") {
     const base = [
-      day("d1", "Squat Focus", scoredPick("legs", 2, [])),
-      day("d2", "Bench Focus", scoredPick("chest", 2, [])),
-      day("d3", "Deadlift Focus", scoredPick("back", 2, [])),
-      day("d4", "Press Focus", scoredPick("shoulders", 2, [])),
+      day("d1", "Squat Focus", scoredPick("legs", 2, [], 0)),
+      day("d2", "Bench Focus", scoredPick("chest", 2, [], 1)),
+      day("d3", "Deadlift Focus", scoredPick("back", 2, [], 2)),
+      day("d4", "Press Focus", scoredPick("shoulders", 2, [], 3)),
     ];
     return base.slice(0, days);
   }
@@ -203,7 +260,7 @@ function generateEnhancedPlan(
     day(
       `d${i + 1}`,
       `Full Body ${i + 1}`,
-      fbMuscles.flatMap((m) => scoredPick(m, 1, [])),
+      fbMuscles.flatMap((m) => scoredPick(m, 1, [], i)),
     ),
   );
 }
@@ -423,12 +480,16 @@ export const useAppStore = create<AppState>()(
       setUnits: (units) => set({ units }),
       setProfile: (profile) => {
         const blocks = createPeriodizationBlocks(profile.experience, 0, profile.goal);
-        const plan = generateEnhancedPlan(profile, blocks, 0);
-        const seeded = get().bodyWeight.length === 0 ? seed() : {};
+        const state = get();
+        const plan = generateEnhancedPlan(profile, blocks, 0, {
+          favorites: state.favorites,
+          disliked: state.disliked,
+        });
+        const seeded = state.bodyWeight.length === 0 ? seed() : {};
         set({ profile, plan, trainingBlocks: blocks, currentWeekNumber: 0, ...seeded });
         // Check achievements unlocked by setting profile + plan
-        const ctx = buildAchievementContext(get().sessions, get().bodyWeight, plan.length);
-        const newAchs = checkNewAchievements(ctx, get().achievements);
+        const ctx = buildAchievementContext(state.sessions, state.bodyWeight, plan.length);
+        const newAchs = checkNewAchievements(ctx, state.achievements);
         for (const a of newAchs) {
           get().unlockAchievement(a.id);
           showAchievementNotification(a.title, a.description);

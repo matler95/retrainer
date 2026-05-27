@@ -2,10 +2,14 @@
  * Hook: useProgressionHint
  *
  * Wraps the progression engine into a hook that provides
- * per-exercise progression decisions based on the last completed session.
+ * per-exercise progression decisions based on the last completed session,
+ * with e1RM trend analysis for plateau and deload detection.
  *
  * WHY: Separating progression logic from UI makes the workout view cleaner
  * and allows reusing progression decisions in plan review and dashboard.
+ *
+ * The hook now integrates with the enhanced progression engine which uses
+ * e1RM historical tracking to detect plateaus and recommend deloads/variations.
  */
 
 import { useMemo } from "react";
@@ -14,25 +18,31 @@ import {
   assessExerciseProgress,
   type ProgressionDecision,
 } from "@/lib/progressionEngine";
-import { average1RM, epley1RM } from "@/lib/loadCalculator";
+import {
+  average1RM,
+  epley1RM,
+  analyzeE1RMTrend,
+  type E1RMRecord,
+} from "@/lib/loadCalculator";
 import type { PlannedExercise } from "@/store/useAppStore";
 
 export interface ExerciseProgression {
   exerciseId: string;
   decision: ProgressionDecision;
   estimated1RM: number;
+  /** e1RM trend analysis, if available */
+  trend?: ReturnType<typeof analyzeE1RMTrend>;
 }
 
 /**
  * Returns progression decisions for all exercises in the most recent session
- * for a given dayId.
+ * for a given dayId, with e1RM trend analysis for plateau detection.
  *
  * If there is no session data for the dayId, returns an empty array.
  */
 export function useProgressionForDay(dayId: string): ExerciseProgression[] {
   const sessions = useAppStore((s) => s.sessions);
   const plan = useAppStore((s) => s.plan);
-  const profile = useAppStore((s) => s.profile);
 
   return useMemo(() => {
     const dayPlan = plan.find((d) => d.id === dayId);
@@ -61,38 +71,63 @@ export function useProgressionForDay(dayId: string): ExerciseProgression[] {
             message: "Nice work — keep building consistency.",
             nextWeight: 0,
             action: "maintain",
+            reasoning: "No plan data for this exercise.",
           },
           estimated1RM: 0,
         };
       }
 
-      // Estimate 1RM from the logged sets
-      const doneSets = log.sets.filter((s) => s.done);
-      let estimated1RM = 0;
+      // Build e1RM records for this exercise from all sessions
+      const e1rmRecords: E1RMRecord[] = [];
+      const exercisesForExercise = (exId: string) =>
+        sessions.flatMap((s) =>
+          s.exercises
+            .filter((e) => e.exerciseId === exId)
+            .map((e) => ({
+              date: s.date,
+              sets: e.sets,
+            })),
+        );
 
-      if (doneSets.length > 0) {
-        // Use the set with the best combination of weight × reps for 1RM estimation
+      for (const { date, sets } of exercisesForExercise(log.exerciseId)) {
+        const doneSets = sets.filter((s) => s.done && s.reps > 0 && s.weight > 0);
+        if (doneSets.length === 0) continue;
+
         const bestSet = doneSets.reduce((best, set) => {
           const est = epley1RM(set.weight, Math.max(1, set.reps));
           const bestEst = epley1RM(best.weight, Math.max(1, best.reps));
           return est > bestEst ? set : best;
         }, doneSets[0]);
 
-        estimated1RM = average1RM(
-          bestSet.weight,
-          Math.max(1, bestSet.reps),
-        );
+        const estimated1RM = average1RM(bestSet.weight, Math.max(1, bestSet.reps));
+
+        e1rmRecords.push({
+          exerciseId: log.exerciseId,
+          date,
+          estimated1RM: Math.round(estimated1RM * 100) / 100,
+          formula: "average",
+          sourceSet: { weight: bestSet.weight, reps: bestSet.reps },
+        });
       }
 
-      const decision = assessExerciseProgress(planExercise, {
-        lastWeight: planExercise.lastWeight,
-        sets: log.sets,
-      });
+      // Analyze e1RM trend
+      const trend = analyzeE1RMTrend(e1rmRecords);
+
+      // Get progression decision with trend context
+      const decision = assessExerciseProgress(
+        planExercise,
+        {
+          lastWeight: planExercise.lastWeight,
+          sets: log.sets,
+        },
+        trend,
+      );
 
       return {
         exerciseId: log.exerciseId,
         decision,
-        estimated1RM: Math.round(estimated1RM * 100) / 100,
+        estimated1RM: trend.current,
+        trend,
       };
     });
   }, [sessions, plan, dayId]);
@@ -101,6 +136,7 @@ export function useProgressionForDay(dayId: string): ExerciseProgression[] {
 /**
  * Returns a summary of progression status across all exercises.
  * Useful for the dashboard / progress page.
+ * Updated to include the new 'variation' action type.
  */
 export function useProgressionSummary(): {
   totalExercises: number;
@@ -108,6 +144,7 @@ export function useProgressionSummary(): {
   maintaining: number;
   deloading: number;
   technique: number;
+  variation: number;
 } {
   const plan = useAppStore((s) => s.plan);
   const sessions = useAppStore((s) => s.sessions);
@@ -119,6 +156,7 @@ export function useProgressionSummary(): {
       maintaining: 0,
       deloading: 0,
       technique: 0,
+      variation: 0,
     };
 
     for (const day of plan) {
@@ -148,6 +186,7 @@ export function useProgressionSummary(): {
         else if (decision.action === "maintain") results.maintaining++;
         else if (decision.action === "deload") results.deloading++;
         else if (decision.action === "technique") results.technique++;
+        else if (decision.action === "variation") results.variation++;
       }
     }
 
