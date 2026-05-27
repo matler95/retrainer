@@ -4,6 +4,7 @@ import { buildAchievementContext, checkNewAchievements } from "@/lib/achievement
 import { showAchievementNotification } from "@/lib/notifications";
 import { createPeriodizationBlocks, type TrainingBlock, type UndulatingBlock } from "@/lib/periodization";
 import { generateEnhancedPlan } from "@/lib/planGenerator";
+import { estimateStartingWeights } from "@/lib/startingWeightEstimator";
 import type {
   Profile,
   PlanDay,
@@ -158,9 +159,18 @@ export const useAppStore = create<AppState>()(
           favorites: state.favorites,
           disliked: state.disliked,
         });
+        // Apply starting weights from estimation algorithm
+        const startingWeights = estimateStartingWeights(profile, profile.trainingHistory);
+        const planWithWeights = plan.map((day) => ({
+          ...day,
+          exercises: day.exercises.map((ex) => ({
+            ...ex,
+            lastWeight: startingWeights[ex.exerciseId] ?? ex.lastWeight,
+          })),
+        }));
         set({
           profile,
-          plan,
+          plan: planWithWeights,
           trainingBlocks: blocks,
           currentWeekNumber: 0,
         });

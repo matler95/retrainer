@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useAppStore, type Profile, type Goal, type Experience, type Style, type Activity, type Gender } from "@/store/useAppStore";
+import { useAppStore } from "@/store/useAppStore";
+import type { Profile, Goal, Experience, Style, Activity, Gender, MovementAssessment, TrainingHistory, RecoveryProfile } from "@/data/types";
 import { EQUIPMENT_OPTIONS, MUSCLE_GROUPS, type Equipment, type MuscleGroup } from "@/data/exercises";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -142,6 +143,87 @@ function Onboarding() {
       </div>,
     },
     {
+      title: "Movement assessment", subtitle: "Help us choose exercises that work for your body.",
+      body: <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm">Can you squat below parallel?</span>
+          <Switch checked={p.movementAssessment?.canSquatBelowParallel ?? true}
+            onCheckedChange={v => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), canSquatBelowParallel: v })} />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm">Can you touch your toes?</span>
+          <Switch checked={p.movementAssessment?.canTouchToes ?? true}
+            onCheckedChange={v => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), canTouchToes: v })} />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Shoulder mobility</label>
+          <div className="flex gap-2 mt-1">{(["full", "limited", "restricted"] as const).map(s =>
+            <Chip key={s} active={(p.movementAssessment?.shoulderMobility ?? "full") === s}
+              onClick={() => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), shoulderMobility: s })}>{s}</Chip>
+          )}</div>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Hip flexor tightness</label>
+          <div className="flex gap-2 mt-1">{(["none", "mild", "severe"] as const).map(s =>
+            <Chip key={s} active={(p.movementAssessment?.hipFlexorTightness ?? "none") === s}
+              onClick={() => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), hipFlexorTightness: s })}>{s}</Chip>
+          )}</div>
+        </div>
+      </div>,
+    },
+    {
+      title: "Training history", subtitle: "This helps us estimate your starting weights.",
+      body: <div className="space-y-4">
+        <div>
+          <label className="text-xs text-muted-foreground">Years of consistent training</label>
+          <div className="flex gap-2 mt-1">{[0, 1, 2, 3, 5, 8].map(y =>
+            <Chip key={y} active={(p.trainingHistory?.yearsTraining ?? 0) === y}
+              onClick={() => update("trainingHistory", { ...(p.trainingHistory ?? { yearsTraining: 0, previousPrograms: [], peakLifts: {} }), yearsTraining: y })}>{y === 0 ? "<1" : `${y}+`}</Chip>
+          )}</div>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Previous programs (select all that apply)</label>
+          <div className="flex flex-wrap gap-2 mt-1">{["powerlifting", "bodybuilding", "crossfit", "calisthenics", "sports", "none"].map(prog =>
+            <Chip key={prog} active={(p.trainingHistory?.previousPrograms ?? []).includes(prog)}
+              onClick={() => {
+                const current = p.trainingHistory?.previousPrograms ?? [];
+                const updated = current.includes(prog) ? current.filter(x => x !== prog) : [...current, prog];
+                update("trainingHistory", { ...(p.trainingHistory ?? { yearsTraining: 0, previousPrograms: [], peakLifts: {} }), previousPrograms: updated });
+              }}>{prog}</Chip>
+          )}</div>
+        </div>
+      </div>,
+    },
+    {
+      title: "Recovery profile", subtitle: "Affects your readiness score and volume recommendations.",
+      body: <div className="space-y-4">
+        <div>
+          <div className="flex justify-between text-sm mb-2"><span>Average sleep</span><span className="font-semibold">{p.recoveryProfile?.sleepHoursAvg ?? 7}h</span></div>
+          <Slider min={4} max={10} step={0.5} value={[p.recoveryProfile?.sleepHoursAvg ?? 7]}
+            onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), sleepHoursAvg: v })} />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Stress level</label>
+          <div className="flex gap-2 mt-1">{([1, 2, 3, 4, 5] as const).map(s =>
+            <Chip key={s} active={(p.recoveryProfile?.stressLevel ?? 3) === s}
+              onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), stressLevel: s })}>{s === 1 ? "Low" : s === 5 ? "High" : `${s}`}</Chip>
+          )}</div>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Job activity</label>
+          <div className="flex gap-2 mt-1">{(["desk", "light", "physical"] as const).map(j =>
+            <Chip key={j} active={(p.recoveryProfile?.jobActivity ?? "desk") === j}
+              onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), jobActivity: j })}>{j}</Chip>
+          )}</div>
+        </div>
+        <div>
+          <div className="flex justify-between text-sm mb-2"><span>Cardio sessions per week</span><span className="font-semibold">{p.recoveryProfile?.cardioFrequency ?? 0}</span></div>
+          <Slider min={0} max={7} step={1} value={[p.recoveryProfile?.cardioFrequency ?? 0]}
+            onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), cardioFrequency: v })} />
+        </div>
+      </div>,
+    },
+    {
       title: "Review", subtitle: "We'll build your plan now.",
       body: <div className="space-y-2 text-sm">
         <Row k="Goal" v={p.goal} /><Row k="Experience" v={p.experience} />
@@ -151,6 +233,9 @@ function Onboarding() {
         {p.priorities.length > 0 && <Row k="Priority" v={p.priorities.join(", ")} />}
         {p.avoid.length > 0 && <Row k="Avoid" v={p.avoid.join(", ")} />}
         <Row k="Supplements" v={p.supplements.join(", ") || "none"} />
+        {p.movementAssessment && <Row k="Mobility" v={`Squat: ${p.movementAssessment.canSquatBelowParallel ? "yes" : "no"}, Shoulders: ${p.movementAssessment.shoulderMobility}`} />}
+        {p.trainingHistory && <Row k="History" v={`${p.trainingHistory.yearsTraining}yr, ${(p.trainingHistory.previousPrograms ?? []).join(", ") || "none"}`} />}
+        {p.recoveryProfile && <Row k="Recovery" v={`${p.recoveryProfile.sleepHoursAvg}h sleep, stress ${p.recoveryProfile.stressLevel}/5`} />}
       </div>,
     },
   ];
