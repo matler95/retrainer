@@ -5,6 +5,7 @@ import { showAchievementNotification } from "@/lib/notifications";
 import { createPeriodizationBlocks, type TrainingBlock, type UndulatingBlock } from "@/lib/periodization";
 import { generateEnhancedPlan } from "@/lib/planGenerator";
 import { estimateStartingWeights } from "@/lib/startingWeightEstimator";
+import { detectNewPRs } from "@/lib/prDatabase";
 import type {
   Profile,
   PlanDay,
@@ -187,6 +188,11 @@ export const useAppStore = create<AppState>()(
 
       saveSession: (s) => {
         set({ sessions: [s, ...get().sessions] });
+        // Detect and store new PRs from this session
+        const newPRs = detectNewPRs(s, get().exercisePRs);
+        if (newPRs.length > 0) {
+          set({ exercisePRs: [...get().exercisePRs, ...newPRs] });
+        }
         // Update lastWeight on plan from completed sets
         const updatedPlan = get().plan.map((day) => {
           if (day.id !== s.dayId) return day;

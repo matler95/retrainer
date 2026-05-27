@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { AppShell, AppHeader, StatCard, SectionTitle, Card } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,8 @@ import { EXERCISES } from "@/data/exercises";
 import { goalCalories, proteinTargetG, waterTargetMl } from "@/lib/calc";
 import { coachOfTheDay } from "@/lib/trainer";
 import { useReadiness } from "@/hooks/useReadiness";
-import { Droplet, Pill, Flame, Plus, ChevronRight, Sparkles, Activity } from "lucide-react";
+import { getBestPR } from "@/lib/prDatabase";
+import { Droplet, Pill, Flame, Plus, ChevronRight, Sparkles, Activity, Trophy } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 export const Route = createFileRoute("/")({
@@ -99,6 +100,16 @@ function Dashboard() {
     const diff = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
     return diff < 7;
   }).length;
+
+  const exercisePRs = useAppStore(s => s.exercisePRs);
+
+  // Get recent PRs (last 5, sorted by date)
+  const recentPRs = useMemo(() => {
+    if (exercisePRs.length === 0) return [];
+    return [...exercisePRs]
+      .sort((a, b) => new Date(b.achievedAt).getTime() - new Date(a.achievedAt).getTime())
+      .slice(0, 5);
+  }, [exercisePRs]);
 
   return (
     <AppShell>
@@ -199,14 +210,26 @@ function Dashboard() {
 
       <SectionTitle>Recent PRs</SectionTitle>
       <Card>
-        <ul className="space-y-2">
-          {EXERCISES.slice(0, 3).map(e => (
-            <li key={e.id} className="flex items-center justify-between">
-              <span className="text-sm">{e.name}</span>
-              <span className="text-sm font-semibold flex items-center gap-1 text-primary"><Flame className="size-4" /> {Math.round(20 + Math.random() * 80)} kg</span>
-            </li>
-          ))}
-        </ul>
+        {recentPRs.length > 0 ? (
+          <ul className="space-y-2">
+            {recentPRs.map((pr, i) => {
+              const ex = EXERCISES.find(e => e.id === pr.exerciseId);
+              return (
+                <li key={`${pr.exerciseId}-${pr.repCount}-${i}`} className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm">{ex?.name ?? pr.exerciseId}</span>
+                    <span className="text-xs text-muted-foreground ml-1">({pr.repCount}RM)</span>
+                  </div>
+                  <span className="text-sm font-semibold flex items-center gap-1 text-primary">
+                    <Trophy className="size-4" /> {pr.weightKg} kg
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">Complete workouts to start tracking PRs 🏋️</p>
+        )}
       </Card>
       <p className="text-[10px] text-muted-foreground mt-6 text-center px-4">
         Coaching, calorie and supplement guidance is general fitness information, not medical advice.
