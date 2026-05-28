@@ -123,12 +123,42 @@ export function generateEnhancedPlan(
   const repStr = formatRepRange(repRange);
 
   // Filter usable exercises once
-  const usable = EXERCISES.filter((e) =>
-    e.equipment.some((eq) => profile.equipment.includes(eq)) &&
-    !profile.avoid.some((a) =>
-      e.name.toLowerCase().includes(a.toLowerCase().trim()),
-    ),
-  );
+  const usable = EXERCISES.filter((e) => {
+    // 1. Equipment compatibility
+    if (!e.equipment.some((eq) => profile.equipment.includes(eq))) {
+      return false;
+    }
+
+    // 2. Injury/avoid keyword matching
+    if (
+      profile.avoid.some((a) =>
+        e.name.toLowerCase().includes(a.toLowerCase().trim()),
+      )
+    ) {
+      return false;
+    }
+
+    // 3. Exclude recovery exercises for hypertrophy/strength goals
+    const isHypertrophyGoal = [
+      "build muscle",
+      "strength",
+      "recomposition",
+    ].includes(profile.goal);
+
+    if (isHypertrophyGoal) {
+      // Exclude flexibility and mobility exercises
+      if (e.category === "flexibility" || e.category === "mobility") {
+        return false;
+      }
+
+      // Exclude foam roller exercises (self-myofascial release)
+      if (e.equipment.includes("foam_roller")) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   // Build a profile with favorites/disliked for the scorer
   // Uses a safe spread copy — never mutates the original profile
@@ -208,13 +238,25 @@ export function generateEnhancedPlan(
     const base = muscleMap.map((muscles, i) => {
       const dayNames = ["Push", "Pull", "Legs"];
       const name = dayNames[i] ?? `Day ${i + 1}`;
-      return day(
-        `d${i + 1}`,
-        name,
-        muscles.flatMap((m) =>
-          scoredPick(m as MuscleGroup, getExerciseCount(m as MuscleGroup, i), [], i),
-        ),
-      );
+
+      // Track picked exercises across muscle groups to prevent duplicates
+      const dayPickedExerciseIds: string[] = [];
+      const dayExercises: PlannedExercise[] = [];
+
+      muscles.forEach((m) => {
+        const pickedForMuscle = scoredPick(
+          m as MuscleGroup,
+          getExerciseCount(m as MuscleGroup, i),
+          dayPickedExerciseIds,
+          i,
+        );
+        dayExercises.push(...pickedForMuscle);
+        dayPickedExerciseIds.push(
+          ...pickedForMuscle.map((pe) => pe.exerciseId),
+        );
+      });
+
+      return day(`d${i + 1}`, name, dayExercises);
     });
     return base.slice(0, Math.max(3, days)).concat(
       days > 3
@@ -232,13 +274,25 @@ export function generateEnhancedPlan(
     const base = muscleMap.map((muscles, i) => {
       const dayNames = ["Upper", "Lower"];
       const name = dayNames[i] ?? `Day ${i + 1}`;
-      return day(
-        `d${i + 1}`,
-        name,
-        muscles.flatMap((m) =>
-          scoredPick(m as MuscleGroup, getExerciseCount(m as MuscleGroup, i), [], i),
-        ),
-      );
+
+      // Track picked exercises across muscle groups to prevent duplicates
+      const dayPickedExerciseIds: string[] = [];
+      const dayExercises: PlannedExercise[] = [];
+
+      muscles.forEach((m) => {
+        const pickedForMuscle = scoredPick(
+          m as MuscleGroup,
+          getExerciseCount(m as MuscleGroup, i),
+          dayPickedExerciseIds,
+          i,
+        );
+        dayExercises.push(...pickedForMuscle);
+        dayPickedExerciseIds.push(
+          ...pickedForMuscle.map((pe) => pe.exerciseId),
+        );
+      });
+
+      return day(`d${i + 1}`, name, dayExercises);
     });
     const out: PlanDay[] = [];
     for (let i = 0; i < days; i++) {
@@ -260,22 +314,44 @@ export function generateEnhancedPlan(
       ["Shoulders & Core", ["shoulders", "core"]],
       ["Arms", ["biceps", "triceps"]],
     ];
-    return split.slice(0, days).map((s, i) =>
-      day(
-        `d${i + 1}`,
-        s[0],
-        s[1].flatMap((m) => scoredPick(m, getExerciseCount(m, i), [], i)),
-      ),
-    );
+    return split.slice(0, days).map((s, i) => {
+      // Track picked exercises across muscle groups to prevent duplicates
+      const dayPickedExerciseIds: string[] = [];
+      const dayExercises: PlannedExercise[] = [];
+
+      s[1].forEach((m) => {
+        const pickedForMuscle = scoredPick(
+          m as MuscleGroup,
+          getExerciseCount(m, i),
+          dayPickedExerciseIds,
+          i,
+        );
+        dayExercises.push(...pickedForMuscle);
+        dayPickedExerciseIds.push(
+          ...pickedForMuscle.map((pe) => pe.exerciseId),
+        );
+      });
+
+      return day(`d${i + 1}`, s[0], dayExercises);
+    });
   }
 
   if (style === "strength focused") {
-    const base = [
-      day("d1", "Squat Focus", scoredPick("legs", 2, [], 0)),
-      day("d2", "Bench Focus", scoredPick("chest", 2, [], 1)),
-      day("d3", "Deadlift Focus", scoredPick("back", 2, [], 2)),
-      day("d4", "Press Focus", scoredPick("shoulders", 2, [], 3)),
+    // Each day focuses on a single muscle group, but still track picks within day
+    const strengthDays: [string, MuscleGroup][] = [
+      ["Squat Focus", "legs"],
+      ["Bench Focus", "chest"],
+      ["Deadlift Focus", "back"],
+      ["Press Focus", "shoulders"],
     ];
+    const base = strengthDays.map(([name, muscle], i) => {
+      const dayPickedExerciseIds: string[] = [];
+      const pickedForMuscle = scoredPick(muscle, 2, dayPickedExerciseIds, i);
+      dayPickedExerciseIds.push(
+        ...pickedForMuscle.map((pe) => pe.exerciseId),
+      );
+      return day(`d${i + 1}`, name, pickedForMuscle);
+    });
     return base.slice(0, days);
   }
 
@@ -287,11 +363,24 @@ export function generateEnhancedPlan(
     "shoulders",
     "core",
   ];
-  return Array.from({ length: days }).map((_, i) =>
-    day(
-      `d${i + 1}`,
-      `Full Body ${i + 1}`,
-      fbMuscles.flatMap((m) => scoredPick(m, 1, [], i)),
-    ),
-  );
+  return Array.from({ length: days }).map((_, i) => {
+    // Track picked exercises across muscle groups to prevent duplicates
+    const dayPickedExerciseIds: string[] = [];
+    const dayExercises: PlannedExercise[] = [];
+
+    fbMuscles.forEach((m) => {
+      const pickedForMuscle = scoredPick(
+        m,
+        1,
+        dayPickedExerciseIds,
+        i,
+      );
+      dayExercises.push(...pickedForMuscle);
+      dayPickedExerciseIds.push(
+        ...pickedForMuscle.map((pe) => pe.exerciseId),
+      );
+    });
+
+    return day(`d${i + 1}`, `Full Body ${i + 1}`, dayExercises);
+  });
 }

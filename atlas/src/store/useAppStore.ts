@@ -4,6 +4,7 @@ import { buildAchievementContext, checkNewAchievements } from "@/lib/achievement
 import { showAchievementNotification } from "@/lib/notifications";
 import { createPeriodizationBlocks, type TrainingBlock, type UndulatingBlock } from "@/lib/periodization";
 import { generateEnhancedPlan } from "@/lib/planGenerator";
+import { validateGeneratedPlan } from "@/lib/planValidator";
 import { estimateStartingWeights } from "@/lib/startingWeightEstimator";
 import { detectNewPRs } from "@/lib/prDatabase";
 import type {
@@ -160,6 +161,16 @@ export const useAppStore = create<AppState>()(
           favorites: state.favorites,
           disliked: state.disliked,
         });
+
+        // Validate generated plan before storing
+        const validationErrors = validateGeneratedPlan(plan, profile);
+        if (validationErrors.length > 0) {
+          console.error("Plan validation errors:", validationErrors);
+          throw new Error(
+            `Generated plan is invalid: ${validationErrors.slice(0, 3).join("; ")}`,
+          );
+        }
+
         // Apply starting weights from estimation algorithm
         const startingWeights = estimateStartingWeights(profile, profile.trainingHistory);
         const planWithWeights = plan.map((day) => ({
