@@ -1,15 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAppStore } from "@/store/useAppStore";
-import type { Profile, Goal, Experience, Style, Activity, Gender, MovementAssessment, TrainingHistory, RecoveryProfile } from "@/data/types";
-import { EQUIPMENT_OPTIONS, MUSCLE_GROUPS, type Equipment, type MuscleGroup } from "@/data/exercises";
+import type { Profile, Goal, Experience, Style, Activity, Gender } from "@/data/types";
+import { EQUIPMENT_OPTIONS, MUSCLE_GROUPS } from "@/data/exercises";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Sparkles, Heart, Target, Dumbbell, Calendar, Flame, Droplet, Activity as ActivityIcon, History, Moon, CheckCircle2 } from "lucide-react";
 
 export const Route = createFileRoute("/onboarding")({
   component: Onboarding,
@@ -21,14 +21,24 @@ const STYLES: Style[] = ["full body", "upper/lower", "push/pull/legs", "bodybuil
 const ACTIVITIES: Activity[] = ["sedentary", "light", "moderate", "high"];
 const SUPPS = ["protein", "creatine", "pre-workout", "multivitamin", "omega-3"];
 
+const GOAL_HINTS: Record<Goal, string> = {
+  "lose fat": "We'll optimize calorie burn and keep intensity high.",
+  "build muscle": "Progressive overload with moderate volume and recovery focus.",
+  "strength": "Heavy compound lifts, lower rep ranges, longer rest.",
+  "general fitness": "Balanced mix of strength, endurance, and mobility.",
+  "recomposition": "Build muscle while losing fat — the best of both worlds.",
+};
+
 function Chip({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "min-h-12 px-4 rounded-full border text-sm font-medium capitalize transition-colors",
-        active ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-foreground hover:border-primary/50"
+        "min-h-12 px-4 rounded-full border text-sm font-medium capitalize transition-all tap-scale",
+        active
+          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+          : "bg-card border-border text-foreground hover:border-primary/40"
       )}
     >
       {children}
@@ -55,193 +65,310 @@ function Onboarding() {
   const update = <K extends keyof Profile>(k: K, v: Profile[K]) => setP(prev => ({ ...prev, [k]: v }));
   const toggleArr = <T,>(arr: T[], v: T): T[] => arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
 
-  const steps: { title: string; subtitle: string; body: React.ReactNode }[] = [
+  const steps: { title: string; subtitle: string; icon: React.ReactNode; why: string; body: React.ReactNode }[] = [
+    /* ── 0  Welcome ─────────────────────────────────────────────── */
     {
-      title: "What's your goal?", subtitle: "We'll tailor your plan around it.",
-      body: <div className="flex flex-wrap gap-2">{GOALS.map(g => <Chip key={g} active={p.goal === g} onClick={() => update("goal", g)}>{g}</Chip>)}</div>,
-    },
-    {
-      title: "Your experience", subtitle: "How long have you trained consistently?",
-      body: <div className="flex flex-wrap gap-2">{EXPERIENCES.map(e => <Chip key={e} active={p.experience === e} onClick={() => update("experience", e)}>{e}</Chip>)}</div>,
-    },
-    {
-      title: "About you", subtitle: "We use this for calorie & water targets.",
-      body: <div className="space-y-4">
-        <div>
-          <label className="text-xs text-muted-foreground">Gender</label>
-          <div className="flex gap-2 mt-1">
-            {(["male", "female", "other"] as Gender[]).map(g => <Chip key={g} active={p.gender === g} onClick={() => update("gender", g)}>{g}</Chip>)}
+      title: "Welcome to Coach",
+      subtitle: "Your AI-powered personal trainer.",
+      icon: <Sparkles className="size-6 text-accent" />,
+      why: "",
+      body: (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            We'll ask you a few questions to build a training plan tailored to your body,
+            goals, and schedule. It only takes a couple of minutes.
+          </p>
+          <div className="grid grid-cols-1 gap-3">
+            {[
+              { icon: <Target className="size-4 text-accent" />, text: "Personalized to your exact goals" },
+              { icon: <Dumbbell className="size-4 text-accent" />, text: "Uses equipment you already have" },
+              { icon: <ActivityIcon className="size-4 text-accent" />, text: "Adapts as you progress" },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-3 text-sm">
+                {item.icon}
+                <span>{item.text}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <Field label="Age" suffix="yrs"><Input type="number" inputMode="numeric" value={p.age} onChange={e => update("age", +e.target.value)} /></Field>
-        <Field label="Height" suffix="cm"><Input type="number" inputMode="numeric" value={p.heightCm} onChange={e => update("heightCm", +e.target.value)} /></Field>
-        <Field label="Weight" suffix="kg"><Input type="number" inputMode="decimal" value={p.weightKg} onChange={e => update("weightKg", +e.target.value)} /></Field>
-      </div>,
+      ),
     },
+    /* ── 1  Goal ────────────────────────────────────────────────── */
     {
-      title: "Available equipment", subtitle: "Pick everything you have access to.",
+      title: "What's your goal?",
+      subtitle: "We'll tailor your plan around it.",
+      icon: <Target className="size-5 text-accent" />,
+      why: "Your goal determines exercise selection, rep ranges, rest periods, and weekly volume.",
+      body: (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {GOALS.map(g => <Chip key={g} active={p.goal === g} onClick={() => update("goal", g)}>{g}</Chip>)}
+          </div>
+          <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2">
+            {GOAL_HINTS[p.goal]}
+          </p>
+        </div>
+      ),
+    },
+    /* ── 2  Experience ──────────────────────────────────────────── */
+    {
+      title: "Your experience",
+      subtitle: "How long have you trained consistently?",
+      icon: <History className="size-5 text-accent" />,
+      why: "Experience level affects starting weights, exercise complexity, and weekly volume recommendations.",
+      body: (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {EXPERIENCES.map(e => <Chip key={e} active={p.experience === e} onClick={() => update("experience", e)}>{e}</Chip>)}
+          </div>
+          <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl px-3 py-2">
+            {p.experience === "beginner" && "We'll focus on form, progressive overload basics, and manageable volume."}
+            {p.experience === "intermediate" && "We'll introduce periodization, varied rep ranges, and targeted volume."}
+            {p.experience === "advanced" && "We'll use advanced techniques, higher volume, and fine-tuned progression."}
+          </p>
+        </div>
+      ),
+    },
+    /* ── 3  About you ───────────────────────────────────────────── */
+    {
+      title: "About you",
+      subtitle: "We use this for calorie & water targets.",
+      icon: <Heart className="size-5 text-accent" />,
+      why: "Body stats help us calculate accurate calorie needs, hydration targets, and starting weights.",
+      body: (
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-muted-foreground">Gender</label>
+            <div className="flex gap-2 mt-1">
+              {(["male", "female", "other"] as Gender[]).map(g => <Chip key={g} active={p.gender === g} onClick={() => update("gender", g)}>{g}</Chip>)}
+            </div>
+          </div>
+          <Field label="Age" suffix="yrs"><Input type="number" inputMode="numeric" value={p.age} onChange={e => update("age", +e.target.value)} /></Field>
+          <Field label="Height" suffix="cm"><Input type="number" inputMode="numeric" value={p.heightCm} onChange={e => update("heightCm", +e.target.value)} /></Field>
+          <Field label="Weight" suffix="kg"><Input type="number" inputMode="decimal" value={p.weightKg} onChange={e => update("weightKg", +e.target.value)} /></Field>
+        </div>
+      ),
+    },
+    /* ── 4  Equipment ───────────────────────────────────────────── */
+    {
+      title: "Available equipment",
+      subtitle: "Pick everything you have access to.",
+      icon: <Dumbbell className="size-5 text-accent" />,
+      why: "We'll only program exercises you can actually perform with your available equipment.",
       body: <div className="flex flex-wrap gap-2">{EQUIPMENT_OPTIONS.map(eq => <Chip key={eq} active={p.equipment.includes(eq)} onClick={() => update("equipment", toggleArr(p.equipment, eq))}>{eq}</Chip>)}</div>,
     },
+    /* ── 5  Schedule + Style ────────────────────────────────────── */
     {
-      title: "Your schedule", subtitle: "How often and how long?",
-      body: <div className="space-y-6">
-        <div>
-          <div className="flex justify-between text-sm mb-2"><span>Days per week</span><span className="font-semibold">{p.daysPerWeek}</span></div>
-          <Slider min={2} max={6} step={1} value={[p.daysPerWeek]} onValueChange={([v]) => update("daysPerWeek", v)} />
-        </div>
-        <div>
-          <div className="flex justify-between text-sm mb-2"><span>Session length</span><span className="font-semibold">{p.durationMin} min</span></div>
-          <Slider min={30} max={120} step={15} value={[p.durationMin]} onValueChange={([v]) => update("durationMin", v)} />
-        </div>
-      </div>,
-    },
-    {
-      title: "Workout style", subtitle: "Choose a structure you like.",
-      body: <div className="flex flex-wrap gap-2">{STYLES.map(s => <Chip key={s} active={p.style === s} onClick={() => update("style", s)}>{s}</Chip>)}</div>,
-    },
-    {
-      title: "Prioritize & avoid", subtitle: "Optional.",
-      body: <div className="space-y-4">
-        <div>
-          <label className="text-xs text-muted-foreground">Prioritized muscle groups</label>
-          <div className="flex flex-wrap gap-2 mt-1">{MUSCLE_GROUPS.map(m => <Chip key={m} active={p.priorities.includes(m)} onClick={() => update("priorities", toggleArr(p.priorities, m))}>{m}</Chip>)}</div>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Exercises to avoid (comma separated)</label>
-          <Input placeholder="deadlift, overhead press" value={p.avoid.join(", ")} onChange={e => update("avoid", e.target.value.split(",").map(x => x.trim()).filter(Boolean))} />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Injuries / limitations</label>
-          <Textarea placeholder="Anything we should work around?" value={p.injuries} onChange={e => update("injuries", e.target.value)} />
-        </div>
-      </div>,
-    },
-    {
-      title: "Lifestyle", subtitle: "For calorie estimate.",
-      body: <div className="space-y-4">
-        <div>
-          <label className="text-xs text-muted-foreground">Activity level outside training</label>
-          <div className="flex flex-wrap gap-2 mt-1">{ACTIVITIES.map(a => <Chip key={a} active={p.activity === a} onClick={() => update("activity", a)}>{a}</Chip>)}</div>
-        </div>
-      </div>,
-    },
-    {
-      title: "Hydration & supplements", subtitle: "We'll remind you on the dashboard.",
-      body: <div className="space-y-5">
-        <div>
-          <label className="text-xs text-muted-foreground">Supplements you take</label>
-          <div className="flex flex-wrap gap-2 mt-1">{SUPPS.map(s => <Chip key={s} active={p.supplements.includes(s)} onClick={() => update("supplements", toggleArr(p.supplements, s))}>{s}</Chip>)}</div>
-        </div>
-        <div className="flex items-center justify-between">
+      title: "Training preferences",
+      subtitle: "How you like to train.",
+      icon: <Calendar className="size-5 text-accent" />,
+      why: "Your schedule and preferred split determine how we distribute volume across the week.",
+      body: (
+        <div className="space-y-6">
           <div>
-            <div className="text-sm font-medium">Auto water target</div>
-            <div className="text-xs text-muted-foreground">Based on body weight (35 ml/kg)</div>
+            <div className="flex justify-between text-sm mb-2"><span>Days per week</span><span className="font-semibold">{p.daysPerWeek}</span></div>
+            <Slider min={2} max={6} step={1} value={[p.daysPerWeek]} onValueChange={([v]) => update("daysPerWeek", v)} />
           </div>
-          <Switch checked={p.waterAuto} onCheckedChange={v => update("waterAuto", v)} />
+          <div>
+            <div className="flex justify-between text-sm mb-2"><span>Session length</span><span className="font-semibold">{p.durationMin} min</span></div>
+            <Slider min={30} max={120} step={15} value={[p.durationMin]} onValueChange={([v]) => update("durationMin", v)} />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Workout style</label>
+            <div className="flex flex-wrap gap-2 mt-1">{STYLES.map(s => <Chip key={s} active={p.style === s} onClick={() => update("style", s)}>{s}</Chip>)}</div>
+          </div>
         </div>
-        {!p.waterAuto && <Field label="Water goal" suffix="ml"><Input type="number" value={p.waterTargetMl} onChange={e => update("waterTargetMl", +e.target.value)} /></Field>}
-      </div>,
+      ),
     },
+    /* ── 6  Prioritize & avoid ──────────────────────────────────── */
     {
-      title: "Movement assessment", subtitle: "Help us choose exercises that work for your body.",
-      body: <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm">Can you squat below parallel?</span>
-          <Switch checked={p.movementAssessment?.canSquatBelowParallel ?? true}
-            onCheckedChange={v => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), canSquatBelowParallel: v })} />
+      title: "Prioritize & avoid",
+      subtitle: "Fine-tune your plan (optional).",
+      icon: <Flame className="size-5 text-accent" />,
+      why: "We'll add extra volume to prioritized muscles and work around anything you need to avoid.",
+      body: (
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs text-muted-foreground">Prioritized muscle groups</label>
+            <div className="flex flex-wrap gap-2 mt-1">{MUSCLE_GROUPS.map(m => <Chip key={m} active={p.priorities.includes(m)} onClick={() => update("priorities", toggleArr(p.priorities, m))}>{m}</Chip>)}</div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Exercises to avoid (comma separated)</label>
+            <Input placeholder="deadlift, overhead press" value={p.avoid.join(", ")} onChange={e => update("avoid", e.target.value.split(",").map(x => x.trim()).filter(Boolean))} />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Injuries / limitations</label>
+            <Textarea placeholder="Anything we should work around?" value={p.injuries} onChange={e => update("injuries", e.target.value)} />
+          </div>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm">Can you touch your toes?</span>
-          <Switch checked={p.movementAssessment?.canTouchToes ?? true}
-            onCheckedChange={v => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), canTouchToes: v })} />
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Shoulder mobility</label>
-          <div className="flex gap-2 mt-1">{(["full", "limited", "restricted"] as const).map(s =>
-            <Chip key={s} active={(p.movementAssessment?.shoulderMobility ?? "full") === s}
-              onClick={() => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), shoulderMobility: s })}>{s}</Chip>
-          )}</div>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Hip flexor tightness</label>
-          <div className="flex gap-2 mt-1">{(["none", "mild", "severe"] as const).map(s =>
-            <Chip key={s} active={(p.movementAssessment?.hipFlexorTightness ?? "none") === s}
-              onClick={() => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), hipFlexorTightness: s })}>{s}</Chip>
-          )}</div>
-        </div>
-      </div>,
+      ),
     },
+    /* ── 7  Hydration & supplements ─────────────────────────────── */
     {
-      title: "Training history", subtitle: "This helps us estimate your starting weights.",
-      body: <div className="space-y-4">
-        <div>
-          <label className="text-xs text-muted-foreground">Years of consistent training</label>
-          <div className="flex gap-2 mt-1">{[0, 1, 2, 3, 5, 8].map(y =>
-            <Chip key={y} active={(p.trainingHistory?.yearsTraining ?? 0) === y}
-              onClick={() => update("trainingHistory", { ...(p.trainingHistory ?? { yearsTraining: 0, previousPrograms: [], peakLifts: {} }), yearsTraining: y })}>{y === 0 ? "<1" : `${y}+`}</Chip>
-          )}</div>
+      title: "Hydration & supplements",
+      subtitle: "We'll track these on your dashboard.",
+      icon: <Droplet className="size-5 text-accent" />,
+      why: "Staying hydrated and consistent with supplements supports recovery and performance.",
+      body: (
+        <div className="space-y-5">
+          <div>
+            <label className="text-xs text-muted-foreground">Supplements you take</label>
+            <div className="flex flex-wrap gap-2 mt-1">{SUPPS.map(s => <Chip key={s} active={p.supplements.includes(s)} onClick={() => update("supplements", toggleArr(p.supplements, s))}>{s}</Chip>)}</div>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">Auto water target</div>
+              <div className="text-xs text-muted-foreground">Based on body weight (35 ml/kg)</div>
+            </div>
+            <Switch checked={p.waterAuto} onCheckedChange={v => update("waterAuto", v)} />
+          </div>
+          {!p.waterAuto && <Field label="Water goal" suffix="ml"><Input type="number" value={p.waterTargetMl} onChange={e => update("waterTargetMl", +e.target.value)} /></Field>}
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Previous programs (select all that apply)</label>
-          <div className="flex flex-wrap gap-2 mt-1">{["powerlifting", "bodybuilding", "crossfit", "calisthenics", "sports", "none"].map(prog =>
-            <Chip key={prog} active={(p.trainingHistory?.previousPrograms ?? []).includes(prog)}
-              onClick={() => {
-                const current = p.trainingHistory?.previousPrograms ?? [];
-                const updated = current.includes(prog) ? current.filter(x => x !== prog) : [...current, prog];
-                update("trainingHistory", { ...(p.trainingHistory ?? { yearsTraining: 0, previousPrograms: [], peakLifts: {} }), previousPrograms: updated });
-              }}>{prog}</Chip>
-          )}</div>
-        </div>
-      </div>,
+      ),
     },
+    /* ── 8  Movement + Training history ─────────────────────────── */
     {
-      title: "Recovery profile", subtitle: "Affects your readiness score and volume recommendations.",
-      body: <div className="space-y-4">
-        <div>
-          <div className="flex justify-between text-sm mb-2"><span>Average sleep</span><span className="font-semibold">{p.recoveryProfile?.sleepHoursAvg ?? 7}h</span></div>
-          <Slider min={4} max={10} step={0.5} value={[p.recoveryProfile?.sleepHoursAvg ?? 7]}
-            onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), sleepHoursAvg: v })} />
+      title: "Movement & history",
+      subtitle: "Helps us choose the right exercises and starting weights.",
+      icon: <ActivityIcon className="size-5 text-accent" />,
+      why: "Understanding your body and training background ensures safe, effective exercise selection.",
+      body: (
+        <div className="space-y-6">
+          {/* Movement assessment */}
+          <div className="space-y-3">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Mobility</label>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Can you squat below parallel?</span>
+              <Switch checked={p.movementAssessment?.canSquatBelowParallel ?? true}
+                onCheckedChange={v => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), canSquatBelowParallel: v })} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Can you touch your toes?</span>
+              <Switch checked={p.movementAssessment?.canTouchToes ?? true}
+                onCheckedChange={v => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), canTouchToes: v })} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Shoulder mobility</label>
+              <div className="flex gap-2 mt-1">{(["full", "limited", "restricted"] as const).map(s =>
+                <Chip key={s} active={(p.movementAssessment?.shoulderMobility ?? "full") === s}
+                  onClick={() => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), shoulderMobility: s })}>{s}</Chip>
+              )}</div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Hip flexor tightness</label>
+              <div className="flex gap-2 mt-1">{(["none", "mild", "severe"] as const).map(s =>
+                <Chip key={s} active={(p.movementAssessment?.hipFlexorTightness ?? "none") === s}
+                  onClick={() => update("movementAssessment", { ...(p.movementAssessment ?? { canSquatBelowParallel: true, canTouchToes: true, shoulderMobility: "full", hipFlexorTightness: "none" }), hipFlexorTightness: s })}>{s}</Chip>
+              )}</div>
+            </div>
+          </div>
+
+          {/* Training history */}
+          <div className="space-y-3">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">History</label>
+            <div>
+              <label className="text-xs text-muted-foreground">Years of consistent training</label>
+              <div className="flex gap-2 mt-1">{[0, 1, 2, 3, 5, 8].map(y =>
+                <Chip key={y} active={(p.trainingHistory?.yearsTraining ?? 0) === y}
+                  onClick={() => update("trainingHistory", { ...(p.trainingHistory ?? { yearsTraining: 0, previousPrograms: [], peakLifts: {} }), yearsTraining: y })}>{y === 0 ? "<1" : `${y}+`}</Chip>
+              )}</div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Previous programs (select all)</label>
+              <div className="flex flex-wrap gap-2 mt-1">{["powerlifting", "bodybuilding", "crossfit", "calisthenics", "sports", "none"].map(prog =>
+                <Chip key={prog} active={(p.trainingHistory?.previousPrograms ?? []).includes(prog)}
+                  onClick={() => {
+                    const current = p.trainingHistory?.previousPrograms ?? [];
+                    const updated = current.includes(prog) ? current.filter(x => x !== prog) : [...current, prog];
+                    update("trainingHistory", { ...(p.trainingHistory ?? { yearsTraining: 0, previousPrograms: [], peakLifts: {} }), previousPrograms: updated });
+                  }}>{prog}</Chip>
+              )}</div>
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Stress level</label>
-          <div className="flex gap-2 mt-1">{([1, 2, 3, 4, 5] as const).map(s =>
-            <Chip key={s} active={(p.recoveryProfile?.stressLevel ?? 3) === s}
-              onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), stressLevel: s })}>{s === 1 ? "Low" : s === 5 ? "High" : `${s}`}</Chip>
-          )}</div>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Job activity</label>
-          <div className="flex gap-2 mt-1">{(["desk", "light", "physical"] as const).map(j =>
-            <Chip key={j} active={(p.recoveryProfile?.jobActivity ?? "desk") === j}
-              onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), jobActivity: j })}>{j}</Chip>
-          )}</div>
-        </div>
-        <div>
-          <div className="flex justify-between text-sm mb-2"><span>Cardio sessions per week</span><span className="font-semibold">{p.recoveryProfile?.cardioFrequency ?? 0}</span></div>
-          <Slider min={0} max={7} step={1} value={[p.recoveryProfile?.cardioFrequency ?? 0]}
-            onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), cardioFrequency: v })} />
-        </div>
-      </div>,
+      ),
     },
+    /* ── 9  Recovery profile + Lifestyle ────────────────────────── */
     {
-      title: "Review", subtitle: "We'll build your plan now.",
-      body: <div className="space-y-2 text-sm">
-        <Row k="Goal" v={p.goal} /><Row k="Experience" v={p.experience} />
-        <Row k="Schedule" v={`${p.daysPerWeek}× / week · ${p.durationMin} min`} />
-        <Row k="Style" v={p.style} />
-        <Row k="Equipment" v={p.equipment.join(", ")} />
-        {p.priorities.length > 0 && <Row k="Priority" v={p.priorities.join(", ")} />}
-        {p.avoid.length > 0 && <Row k="Avoid" v={p.avoid.join(", ")} />}
-        <Row k="Supplements" v={p.supplements.join(", ") || "none"} />
-        {p.movementAssessment && <Row k="Mobility" v={`Squat: ${p.movementAssessment.canSquatBelowParallel ? "yes" : "no"}, Shoulders: ${p.movementAssessment.shoulderMobility}`} />}
-        {p.trainingHistory && <Row k="History" v={`${p.trainingHistory.yearsTraining}yr, ${(p.trainingHistory.previousPrograms ?? []).join(", ") || "none"}`} />}
-        {p.recoveryProfile && <Row k="Recovery" v={`${p.recoveryProfile.sleepHoursAvg}h sleep, stress ${p.recoveryProfile.stressLevel}/5`} />}
-      </div>,
+      title: "Recovery & lifestyle",
+      subtitle: "Affects readiness scoring and volume recommendations.",
+      icon: <Moon className="size-5 text-accent" />,
+      why: "Sleep, stress, and daily activity impact how much training volume you can recover from.",
+      body: (
+        <div className="space-y-6">
+          {/* Lifestyle */}
+          <div>
+            <label className="text-xs text-muted-foreground">Activity level outside training</label>
+            <div className="flex flex-wrap gap-2 mt-1">{ACTIVITIES.map(a => <Chip key={a} active={p.activity === a} onClick={() => update("activity", a)}>{a}</Chip>)}</div>
+          </div>
+
+          {/* Recovery */}
+          <div>
+            <div className="flex justify-between text-sm mb-2"><span>Average sleep</span><span className="font-semibold">{p.recoveryProfile?.sleepHoursAvg ?? 7}h</span></div>
+            <Slider min={4} max={10} step={0.5} value={[p.recoveryProfile?.sleepHoursAvg ?? 7]}
+              onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), sleepHoursAvg: v })} />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Stress level</label>
+            <div className="flex gap-2 mt-1">{([1, 2, 3, 4, 5] as const).map(s =>
+              <Chip key={s} active={(p.recoveryProfile?.stressLevel ?? 3) === s}
+                onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), stressLevel: s })}>{s === 1 ? "Low" : s === 5 ? "High" : `${s}`}</Chip>
+            )}</div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Job activity</label>
+            <div className="flex gap-2 mt-1">{(["desk", "light", "physical"] as const).map(j =>
+              <Chip key={j} active={(p.recoveryProfile?.jobActivity ?? "desk") === j}
+                onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), jobActivity: j })}>{j}</Chip>
+            )}</div>
+          </div>
+          <div>
+            <div className="flex justify-between text-sm mb-2"><span>Cardio sessions per week</span><span className="font-semibold">{p.recoveryProfile?.cardioFrequency ?? 0}</span></div>
+            <Slider min={0} max={7} step={1} value={[p.recoveryProfile?.cardioFrequency ?? 0]}
+              onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), cardioFrequency: v })} />
+          </div>
+        </div>
+      ),
+    },
+    /* ── 10  Review ─────────────────────────────────────────────── */
+    {
+      title: "Review your plan",
+      subtitle: "Here's what we'll build for you.",
+      icon: <CheckCircle2 className="size-5 text-accent" />,
+      why: "",
+      body: (
+        <div className="space-y-4">
+          {/* Plan summary */}
+          <div className="rounded-2xl bg-accent/5 border border-accent/20 p-4">
+            <p className="text-sm leading-relaxed">
+              A <strong>{p.style}</strong> routine for <strong>{p.goal}</strong>, training{" "}
+              <strong>{p.daysPerWeek}×</strong> per week for <strong>{p.durationMin} min</strong> sessions.
+              {p.priorities.length > 0 && ` Emphasizing ${p.priorities.join(", ")}.`}
+            </p>
+          </div>
+
+          {/* Detail rows */}
+          <div className="space-y-0">
+            <Row k="Goal" v={p.goal} why="Determines rep ranges, rest periods, and intensity" />
+            <Row k="Experience" v={p.experience} why="Sets starting volume and exercise complexity" />
+            <Row k="Schedule" v={`${p.daysPerWeek}× / week · ${p.durationMin} min`} why="Distributes training across the week" />
+            <Row k="Style" v={p.style} why="Structures muscle group pairing" />
+            <Row k="Equipment" v={p.equipment.join(", ")} why="Limits exercise pool to what you have" />
+            {p.priorities.length > 0 && <Row k="Priority" v={p.priorities.join(", ")} why="Extra volume for focused growth" />}
+            {p.avoid.length > 0 && <Row k="Avoid" v={p.avoid.join(", ")} why="Excluded from all programming" />}
+            <Row k="Supplements" v={p.supplements.join(", ") || "none"} why="Tracked on your dashboard" />
+            {p.movementAssessment && <Row k="Mobility" v={`Squat: ${p.movementAssessment.canSquatBelowParallel ? "yes" : "no"}, Shoulders: ${p.movementAssessment.shoulderMobility}`} why="Informs exercise substitutions" />}
+            {p.trainingHistory && <Row k="History" v={`${p.trainingHistory.yearsTraining}yr, ${(p.trainingHistory.previousPrograms ?? []).join(", ") || "none"}`} why="Guides starting weight estimates" />}
+            {p.recoveryProfile && <Row k="Recovery" v={`${p.recoveryProfile.sleepHoursAvg}h sleep, stress ${p.recoveryProfile.stressLevel}/5`} why="Adjusts volume for recovery capacity" />}
+          </div>
+        </div>
+      ),
     },
   ];
 
   const current = steps[step];
   const isLast = step === steps.length - 1;
+  const isFirst = step === 0;
   const progress = ((step + 1) / steps.length) * 100;
 
   const finish = () => {
@@ -251,24 +378,54 @@ function Onboarding() {
 
   return (
     <div className="app-shell min-h-dvh px-4 safe-pt pb-32 flex flex-col">
-      <header className="flex items-center gap-3 py-3">
-        {step > 0 ? (
-          <button onClick={() => setStep(s => s - 1)} className="size-10 grid place-items-center rounded-full bg-card border border-border"><ChevronLeft className="size-5" /></button>
-        ) : <div className="size-10" />}
-        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div>
-        <div className="text-xs tabular-nums text-muted-foreground">{step + 1}/{steps.length}</div>
-      </header>
+      {/* Progress header */}
+      {!isFirst && (
+        <header className="flex items-center gap-3 py-3">
+          {step > 0 ? (
+            <button
+              onClick={() => setStep(s => s - 1)}
+              className="size-10 grid place-items-center rounded-full bg-card border border-border tap-scale"
+              aria-label="Go back"
+            >
+              <ChevronLeft className="size-5" />
+            </button>
+          ) : <div className="size-10" />}
+          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-accent transition-all" style={{ width: `${progress}%` }} />
+          </div>
+          <div className="text-xs tabular-nums text-muted-foreground">{step + 1}/{steps.length}</div>
+        </header>
+      )}
 
+      {/* Step content */}
       <div className="mt-4 flex-1">
-        <h1 className="text-3xl font-bold tracking-tight">{current.title}</h1>
+        {isFirst && (
+          <div className="flex items-center gap-2 mb-6">
+            {current.icon}
+          </div>
+        )}
+        <h1 className={cn("font-bold tracking-tight", isFirst ? "text-4xl" : "text-3xl")}>{current.title}</h1>
         <p className="text-sm text-muted-foreground mt-1">{current.subtitle}</p>
+
+        {/* "Why this matters" hint */}
+        {current.why && (
+          <p className="text-xs text-muted-foreground mt-3 bg-muted/40 rounded-xl px-3 py-2 border border-border/50">
+            💡 {current.why}
+          </p>
+        )}
+
         <div className="mt-6">{current.body}</div>
       </div>
 
+      {/* Bottom action */}
       <div className="fixed bottom-0 inset-x-0 bg-background border-t border-border safe-pb">
         <div className="app-shell px-4 py-3">
-          <Button size="lg" className="w-full rounded-full text-base" onClick={() => isLast ? finish() : setStep(s => s + 1)}>
-            {isLast ? "Generate my plan" : "Continue"}
+          <Button
+            size="lg"
+            className="w-full rounded-full text-base tap-scale"
+            onClick={() => isLast ? finish() : setStep(s => s + 1)}
+          >
+            {isFirst ? "Let's get started" : isLast ? "Generate my plan" : "Continue"}
           </Button>
         </div>
       </div>
@@ -288,6 +445,14 @@ function Field({ label, suffix, children }: { label: string; suffix?: string; ch
   );
 }
 
-function Row({ k, v }: { k: string; v: string }) {
-  return <div className="flex justify-between gap-4 py-2 border-b border-border last:border-0"><span className="text-muted-foreground capitalize">{k}</span><span className="font-medium text-right capitalize">{v}</span></div>;
+function Row({ k, v, why }: { k: string; v: string; why?: string }) {
+  return (
+    <div className="py-2.5 border-b border-border/50 last:border-0">
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground capitalize text-sm">{k}</span>
+        <span className="font-medium text-right capitalize text-sm">{v}</span>
+      </div>
+      {why && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{why}</p>}
+    </div>
+  );
 }

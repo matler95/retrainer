@@ -39,10 +39,10 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Paper & Flame — editorial, brutalist training journal */
+/* Paper & Flame — editorial, calm-premium training journal */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.97 0.008 80);             /* #faf7f2 warm paper */
+  --background: oklch(0.97 0.008 80);             /* warm paper */
   --foreground: oklch(0.16 0 0);                  /* near-black ink */
   --card: oklch(0.99 0.005 80);
   --card-foreground: oklch(0.16 0 0);
@@ -54,11 +54,11 @@
   --secondary-foreground: oklch(0.16 0 0);
   --muted: oklch(0.94 0.008 80);
   --muted-foreground: oklch(0.42 0.01 60);
-  --accent: oklch(0.68 0.23 32);                  /* hot orange #ff4d2e */
+  --accent: oklch(0.68 0.23 32);                  /* hot orange — CTAs & highlights only */
   --accent-foreground: oklch(0.97 0.008 80);
   --destructive: oklch(0.55 0.24 28);
   --destructive-foreground: oklch(0.97 0.008 80);
-  --border: oklch(0.16 0 0);                      /* hard black hairlines */
+  --border: oklch(0.88 0.01 80);                  /* softened hairlines */
   --input: oklch(0.92 0.008 80);
   --ring: oklch(0.68 0.23 32);
   --chart-1: oklch(0.68 0.23 32);
@@ -68,9 +68,9 @@
   --chart-5: oklch(0.4 0.05 40);
 }
 
-/* Dark variant — jet black paper inverted, same flame accent */
+/* Dark variant — calm dark with same flame accent */
 .dark {
-  --background: oklch(0.13 0 0);                  /* #0f0f0f */
+  --background: oklch(0.13 0 0);
   --foreground: oklch(0.96 0.005 80);
   --card: oklch(0.17 0 0);
   --card-foreground: oklch(0.96 0.005 80);
@@ -84,7 +84,7 @@
   --muted-foreground: oklch(0.7 0.005 80);
   --accent: oklch(0.68 0.23 32);
   --accent-foreground: oklch(0.13 0 0);
-  --border: oklch(0.96 0.005 80);
+  --border: oklch(0.26 0 0);                      /* softer dark borders */
   --input: oklch(0.22 0 0);
   --ring: oklch(0.68 0.23 32);
 }
@@ -110,7 +110,54 @@
 }
 
 @layer utilities {
+  /* Safe areas */
   .safe-pb { padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem); }
   .safe-pt { padding-top: calc(env(safe-area-inset-top) + 0.5rem); }
+
+  /* App shell — max 28rem, centered */
   .app-shell { max-width: 28rem; margin-inline: auto; }
+
+  /* 8-point grid spacing helpers */
+  .space-grid > * + * { margin-top: 0.5rem; }
+  .gap-grid { gap: 0.5rem; }
+  .gap-grid-2 { gap: 1rem; }
+  .gap-grid-3 { gap: 1.5rem; }
+
+  /* Smooth transitions for interactive elements */
+  .transition-spring {
+    transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 150ms ease;
+  }
+  .transition-smooth {
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Tap feedback */
+  .tap-scale {
+    transition: transform 100ms ease;
+  }
+  .tap-scale:active {
+    transform: scale(0.97);
+  }
+
+  /* Elevation layers */
+  .elevation-card {
+    box-shadow: 0 1px 3px oklch(0 0 0 / 0.04), 0 1px 2px oklch(0 0 0 / 0.06);
+    .dark & {
+      box-shadow: 0 1px 3px oklch(0 0 0 / 0.2), 0 1px 2px oklch(0 0 0 / 0.12);
+    }
+  }
+  .elevation-overlay {
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.08), 0 2px 8px oklch(0 0 0 / 0.04);
+    .dark & {
+      box-shadow: 0 8px 24px oklch(0 0 0 / 0.4), 0 2px 8px oklch(0 0 0 / 0.2);
+    }
+  }
+
+  /* Section divider */
+  .section-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 1rem 0;
+  }
 }
