@@ -141,16 +141,70 @@ function Onboarding() {
       icon: <Heart className="size-5 text-accent" />,
       why: "Body stats help us calculate accurate calorie needs, hydration targets, and starting weights.",
       body: (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
-            <label className="text-xs text-muted-foreground">Gender</label>
-            <div className="flex gap-2 mt-1">
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gender</label>
+            <div className="flex gap-2 mt-2">
               {(["male", "female", "other"] as Gender[]).map(g => <Chip key={g} active={p.gender === g} onClick={() => update("gender", g)}>{g}</Chip>)}
             </div>
           </div>
-          <Field label="Age" suffix="yrs"><Input type="number" inputMode="numeric" value={p.age} onChange={e => update("age", +e.target.value)} /></Field>
-          <Field label="Height" suffix="cm"><Input type="number" inputMode="numeric" value={p.heightCm} onChange={e => update("heightCm", +e.target.value)} /></Field>
-          <Field label="Weight" suffix="kg"><Input type="number" inputMode="decimal" value={p.weightKg} onChange={e => update("weightKg", +e.target.value)} /></Field>
+
+          {/* Age Slider */}
+          <div className="space-y-3 bg-muted/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🎂</span>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Age</label>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{p.age}</div>
+                <div className="text-xs text-muted-foreground">years</div>
+              </div>
+            </div>
+            <Slider min={13} max={100} step={1} value={[p.age]} onValueChange={([v]) => update("age", v)} />
+            <div className="flex justify-between text-xs text-muted-foreground px-1">
+              <span>13</span>
+              <span>100</span>
+            </div>
+          </div>
+
+          {/* Height Slider */}
+          <div className="space-y-3 bg-muted/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📏</span>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Height</label>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{p.heightCm}</div>
+                <div className="text-xs text-muted-foreground">cm</div>
+              </div>
+            </div>
+            <Slider min={140} max={220} step={1} value={[p.heightCm]} onValueChange={([v]) => update("heightCm", v)} />
+            <div className="flex justify-between text-xs text-muted-foreground px-1">
+              <span>140 cm</span>
+              <span>220 cm</span>
+            </div>
+          </div>
+
+          {/* Weight Slider */}
+          <div className="space-y-3 bg-muted/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⚖️</span>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Weight</label>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{p.weightKg}</div>
+                <div className="text-xs text-muted-foreground">kg</div>
+              </div>
+            </div>
+            <Slider min={40} max={150} step={0.5} value={[p.weightKg]} onValueChange={([v]) => update("weightKg", v)} />
+            <div className="flex justify-between text-xs text-muted-foreground px-1">
+              <span>40 kg</span>
+              <span>150 kg</span>
+            </div>
+          </div>
         </div>
       ),
     },
@@ -170,17 +224,47 @@ function Onboarding() {
       why: "Your schedule and preferred split determine how we distribute volume across the week.",
       body: (
         <div className="space-y-6">
-          <div>
-            <div className="flex justify-between text-sm mb-2"><span>Days per week</span><span className="font-semibold">{p.daysPerWeek}</span></div>
+          {/* Days per week card */}
+          <div className="space-y-3 bg-muted/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📅</span>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Days per week</label>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{p.daysPerWeek}</div>
+                <div className="text-xs text-muted-foreground">days</div>
+              </div>
+            </div>
             <Slider min={2} max={6} step={1} value={[p.daysPerWeek]} onValueChange={([v]) => update("daysPerWeek", v)} />
+            <div className="flex justify-between text-xs text-muted-foreground px-1">
+              <span>2 days</span>
+              <span>6 days</span>
+            </div>
           </div>
-          <div>
-            <div className="flex justify-between text-sm mb-2"><span>Session length</span><span className="font-semibold">{p.durationMin} min</span></div>
+
+          {/* Session length card */}
+          <div className="space-y-3 bg-muted/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⏱️</span>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Session length</label>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{p.durationMin}</div>
+                <div className="text-xs text-muted-foreground">min</div>
+              </div>
+            </div>
             <Slider min={30} max={120} step={15} value={[p.durationMin]} onValueChange={([v]) => update("durationMin", v)} />
+            <div className="flex justify-between text-xs text-muted-foreground px-1">
+              <span>30 min</span>
+              <span>120 min</span>
+            </div>
           </div>
+
           <div>
-            <label className="text-xs text-muted-foreground">Workout style</label>
-            <div className="flex flex-wrap gap-2 mt-1">{STYLES.map(s => <Chip key={s} active={p.style === s} onClick={() => update("style", s)}>{s}</Chip>)}</div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Workout style</label>
+            <div className="flex flex-wrap gap-2 mt-2">{STYLES.map(s => <Chip key={s} active={p.style === s} onClick={() => update("style", s)}>{s}</Chip>)}</div>
           </div>
         </div>
       ),
@@ -198,16 +282,17 @@ function Onboarding() {
       body: (
         <div className="space-y-4">
           <div>
-            <label className="text-xs text-muted-foreground">Prioritized muscle groups</label>
-            <div className="flex flex-wrap gap-2 mt-1">{MUSCLE_GROUPS.map(m => <Chip key={m} active={p.priorities.includes(m)} onClick={() => update("priorities", toggleArr(p.priorities, m))}>{m}</Chip>)}</div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Prioritized muscle groups</label>
+            <div className="flex flex-wrap gap-2 mt-2">{MUSCLE_GROUPS.map(m => <Chip key={m} active={p.priorities.includes(m)} onClick={() => update("priorities", toggleArr(p.priorities, m))}>{m}</Chip>)}</div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Exercises to avoid (comma separated)</label>
-            <Input placeholder="deadlift, overhead press" value={p.avoid.join(", ")} onChange={e => update("avoid", e.target.value.split(",").map(x => x.trim()).filter(Boolean))} />
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Exercises to avoid</label>
+            <Input placeholder="deadlift, overhead press" className="mt-2" value={p.avoid.join(", ")} onChange={e => update("avoid", e.target.value.split(",").map(x => x.trim()).filter(Boolean))} />
+            <p className="text-xs text-muted-foreground mt-1">Comma separated</p>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Injuries / limitations</label>
-            <Textarea placeholder="Anything we should work around?" value={p.injuries} onChange={e => update("injuries", e.target.value)} />
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Injuries / limitations</label>
+            <Textarea placeholder="Anything we should work around?" className="mt-2" value={p.injuries} onChange={e => update("injuries", e.target.value)} />
           </div>
         </div>
       ),
@@ -221,8 +306,8 @@ function Onboarding() {
       body: (
         <div className="space-y-5">
           <div>
-            <label className="text-xs text-muted-foreground">Supplements you take</label>
-            <div className="flex flex-wrap gap-2 mt-1">{SUPPS.map(s => <Chip key={s} active={p.supplements.includes(s)} onClick={() => update("supplements", toggleArr(p.supplements, s))}>{s}</Chip>)}</div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Supplements you take</label>
+            <div className="flex flex-wrap gap-2 mt-2">{SUPPS.map(s => <Chip key={s} active={p.supplements.includes(s)} onClick={() => update("supplements", toggleArr(p.supplements, s))}>{s}</Chip>)}</div>
           </div>
           <div className="flex items-center justify-between">
             <div>
@@ -307,34 +392,61 @@ function Onboarding() {
         <div className="space-y-6">
           {/* Lifestyle */}
           <div>
-            <label className="text-xs text-muted-foreground">Activity level outside training</label>
-            <div className="flex flex-wrap gap-2 mt-1">{ACTIVITIES.map(a => <Chip key={a} active={p.activity === a} onClick={() => update("activity", a)}>{a}</Chip>)}</div>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Activity level outside training</label>
+            <div className="flex flex-wrap gap-2 mt-2">{ACTIVITIES.map(a => <Chip key={a} active={p.activity === a} onClick={() => update("activity", a)}>{a}</Chip>)}</div>
           </div>
 
-          {/* Recovery */}
-          <div>
-            <div className="flex justify-between text-sm mb-2"><span>Average sleep</span><span className="font-semibold">{p.recoveryProfile?.sleepHoursAvg ?? 7}h</span></div>
+          {/* Sleep card */}
+          <div className="space-y-3 bg-muted/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🌙</span>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Average sleep</label>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{p.recoveryProfile?.sleepHoursAvg ?? 7}</div>
+                <div className="text-xs text-muted-foreground">hours</div>
+              </div>
+            </div>
             <Slider min={4} max={10} step={0.5} value={[p.recoveryProfile?.sleepHoursAvg ?? 7]}
               onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), sleepHoursAvg: v })} />
+            <div className="flex justify-between text-xs text-muted-foreground px-1">
+              <span>4 hours</span>
+              <span>10 hours</span>
+            </div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Stress level</label>
-            <div className="flex gap-2 mt-1">{([1, 2, 3, 4, 5] as const).map(s =>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stress level</label>
+            <div className="flex gap-2 mt-2">{([1, 2, 3, 4, 5] as const).map(s =>
               <Chip key={s} active={(p.recoveryProfile?.stressLevel ?? 3) === s}
                 onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), stressLevel: s })}>{s === 1 ? "Low" : s === 5 ? "High" : `${s}`}</Chip>
             )}</div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Job activity</label>
-            <div className="flex gap-2 mt-1">{(["desk", "light", "physical"] as const).map(j =>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Job activity</label>
+            <div className="flex gap-2 mt-2">{(["desk", "light", "physical"] as const).map(j =>
               <Chip key={j} active={(p.recoveryProfile?.jobActivity ?? "desk") === j}
                 onClick={() => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), jobActivity: j })}>{j}</Chip>
             )}</div>
           </div>
-          <div>
-            <div className="flex justify-between text-sm mb-2"><span>Cardio sessions per week</span><span className="font-semibold">{p.recoveryProfile?.cardioFrequency ?? 0}</span></div>
+          {/* Cardio frequency card */}
+          <div className="space-y-3 bg-muted/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">❤️</span>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cardio sessions per week</label>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-foreground">{p.recoveryProfile?.cardioFrequency ?? 0}</div>
+                <div className="text-xs text-muted-foreground">sessions</div>
+              </div>
+            </div>
             <Slider min={0} max={7} step={1} value={[p.recoveryProfile?.cardioFrequency ?? 0]}
               onValueChange={([v]) => update("recoveryProfile", { ...(p.recoveryProfile ?? { sleepHoursAvg: 7, stressLevel: 3, jobActivity: "desk", cardioFrequency: 0 }), cardioFrequency: v })} />
+            <div className="flex justify-between text-xs text-muted-foreground px-1">
+              <span>0</span>
+              <span>7</span>
+            </div>
           </div>
         </div>
       ),
