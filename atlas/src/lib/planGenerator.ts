@@ -185,13 +185,28 @@ export function generateEnhancedPlan(
     return template[dayIndex];
   };
 
-  /**
-   * Get the default exercise count for a muscle group.
-   * Uses DEFAULT_EXERCISES_PER_MUSCLE as baseline.
-   */
-  const getExerciseCount = (muscle: MuscleGroup, _dayIndex: number): number => {
-    return DEFAULT_EXERCISES_PER_MUSCLE[muscle] ?? 1;
-  };
+/**
+ * Get the default exercise count for a muscle group.
+ * Uses DEFAULT_EXERCISES_PER_MUSCLE as baseline, scaled by session duration.
+ */
+const getExerciseCount = (muscle: MuscleGroup, _dayIndex: number, durationMin?: number): number => {
+    let count = DEFAULT_EXERCISES_PER_MUSCLE[muscle] ?? 1;
+
+    // Scale by session duration if available
+    if (durationMin !== undefined) {
+        if (durationMin < 30) {
+            count = Math.max(0, Math.round(count * 0.5)); // Short session: half the exercises
+        } else if (durationMin < 45) {
+            count = Math.max(0, Math.round(count * 0.75)); // Moderate-short: 75%
+        } else if (durationMin >= 75) {
+            count = Math.round(count * 1.25); // Long session: 25% more exercises
+        } else if (durationMin >= 90) {
+            count = Math.round(count * 1.5); // Very long session: 50% more
+        }
+    }
+
+    return count;
+};
 
   /**
    * Scored pick: picks top N scored exercises for a muscle group,
@@ -202,15 +217,22 @@ export function generateEnhancedPlan(
     count: number,
     alreadySelected: string[],
     dayIndex: number,
+    /** Optional "already used" pool to force variation on repeat days */
+    repeatAvoid?: string[],
   ): PlannedExercise[] => {
     const neededMuscles = getNeededMuscles(profile.style, dayIndex);
+
+    // Merge repeat avoidance into the already-selected pool
+    const allAvoid = repeatAvoid
+      ? [...alreadySelected, ...repeatAvoid]
+      : alreadySelected;
 
     const picked = pickTopScored(
       usable,
       muscle,
       scoreProfile,
       count,
-      alreadySelected,
+      allAvoid,
       neededMuscles,
     );
 
@@ -252,7 +274,7 @@ export function generateEnhancedPlan(
       muscles.forEach((m) => {
         const pickedForMuscle = scoredPick(
           m as MuscleGroup,
-          getExerciseCount(m as MuscleGroup, i),
+          getExerciseCount(m as MuscleGroup, i, profile.durationMin),
           dayPickedExerciseIds,
           i,
         );
@@ -264,15 +286,46 @@ export function generateEnhancedPlan(
 
       return day(`d${i + 1}`, name, dayExercises);
     });
-    return base.slice(0, Math.max(3, days)).concat(
-      days > 3
-        ? base.slice(0, days - 3).map((d, i) => ({
-            ...d,
-            id: `d${4 + i}`,
-            name: `${d.name} 2`,
-          }))
-        : [],
-    );
+
+    // For repeat days (e.g., Push 2, Pull 2), generate FRESH exercise selections
+    // using the first day's exercises as avoidance to force variation
+    if (days > 3) {
+      const repeatDays: PlanDay[] = [];
+      // Build the pool of exercise IDs used in the first round (per day type)
+      const firstRoundById: Map<number, string[]> = new Map();
+      base.forEach((d, i) => {
+        firstRoundById.set(i, d.exercises.map((pe) => pe.exerciseId));
+      });
+
+      for (let i = 0; i < days - 3; i++) {
+        const templateIndex = i % 3;
+        const dayNames = ["Push", "Pull", "Legs"];
+        const name = `${dayNames[templateIndex]} 2`;
+        const muscles = muscleMap[templateIndex];
+        const firstRoundExercises = firstRoundById.get(templateIndex) ?? [];
+        const dayPickedExerciseIds: string[] = [];
+        const dayExercises: PlannedExercise[] = [];
+
+        muscles.forEach((m) => {
+          const pickedForMuscle = scoredPick(
+            m as MuscleGroup,
+            getExerciseCount(m as MuscleGroup, templateIndex, profile.durationMin),
+            dayPickedExerciseIds,
+            templateIndex,
+            firstRoundExercises, // Avoid repeating first round's exercises
+          );
+          dayExercises.push(...pickedForMuscle);
+          dayPickedExerciseIds.push(
+            ...pickedForMuscle.map((pe) => pe.exerciseId),
+          );
+        });
+
+        repeatDays.push(day(`d${4 + i}`, name, dayExercises));
+      }
+      return base.slice(0, Math.max(3, days)).concat(repeatDays);
+    }
+
+    return base;
   }
 
   if (style === "upper/lower") {
@@ -288,7 +341,7 @@ export function generateEnhancedPlan(
       muscles.forEach((m) => {
         const pickedForMuscle = scoredPick(
           m as MuscleGroup,
-          getExerciseCount(m as MuscleGroup, i),
+          getExerciseCount(m as MuscleGroup, i, profile.durationMin),
           dayPickedExerciseIds,
           i,
         );
@@ -300,14 +353,54 @@ export function generateEnhancedPlan(
 
       return day(`d${i + 1}`, name, dayExercises);
     });
+
+    // For repeat Upper/Lower days (4+ days/week), generate varied selections
+    // by avoiding exercises from the first occurrence of each day type
     const out: PlanDay[] = [];
+    const firstRoundById: Map<number, string[]> = new Map();
+
     for (let i = 0; i < days; i++) {
-      const sourceDay = base[i % base.length];
-      out.push({
-        ...sourceDay,
-        id: `d${i + 1}`,
-        name: `${sourceDay.name} ${Math.floor(i / base.length) + 1}`,
-      });
+      const dayTypeIndex = i % base.length;
+      const sourceDay = base[dayTypeIndex];
+
+      if (i < base.length) {
+        // First round: use base template as-is
+        out.push({
+          ...sourceDay,
+          id: `d${i + 1}`,
+          name: `${sourceDay.name}`,
+        });
+        firstRoundById.set(
+          dayTypeIndex,
+          sourceDay.exercises.map((pe) => pe.exerciseId),
+        );
+      } else {
+        // Repeat round: generate varied selections to avoid repetition
+        const firstRoundExercises = firstRoundById.get(dayTypeIndex) ?? [];
+        const dayPickedExerciseIds: string[] = [];
+        const dayExercises: PlannedExercise[] = [];
+        const muscles = muscleMap[dayTypeIndex];
+
+        muscles.forEach((m) => {
+          const pickedForMuscle = scoredPick(
+            m as MuscleGroup,
+            getExerciseCount(m as MuscleGroup, dayTypeIndex, profile.durationMin),
+            dayPickedExerciseIds,
+            dayTypeIndex,
+            firstRoundExercises, // Avoid repeating first round's exercises
+          );
+          dayExercises.push(...pickedForMuscle);
+          dayPickedExerciseIds.push(
+            ...pickedForMuscle.map((pe) => pe.exerciseId),
+          );
+        });
+
+        out.push({
+          id: `d${i + 1}`,
+          name: `${sourceDay.name} ${Math.floor(i / base.length) + 1}`,
+          exercises: dayExercises,
+        });
+      }
     }
     return out;
   }
