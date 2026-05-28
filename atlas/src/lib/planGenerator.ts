@@ -36,14 +36,27 @@ import { pickTopScored } from "@/lib/exerciseScorer";
  */
 const DEFAULT_EXERCISES_PER_MUSCLE: Partial<Record<MuscleGroup, number>> = {
   chest: 2,
-  back: 2,
   shoulders: 2,
-  biceps: 1,
   triceps: 1,
-  legs: 3,
+  lats: 2,
+  middle_back: 1,
+  traps: 1,
+  biceps: 1,
+  quads: 2,
+  hamstrings: 1,
   glutes: 1,
-  core: 1,
   calves: 1,
+  abs: 1,
+  lower_back: 1,
+  forearms: 0,
+  abductors: 0,
+  adductors: 1,
+  neck: 0,
+  // Legacy aliases
+  back: 2,
+  legs: 3,
+  core: 1,
+  "full body": 1,
 };
 
 /**
@@ -52,16 +65,16 @@ const DEFAULT_EXERCISES_PER_MUSCLE: Partial<Record<MuscleGroup, number>> = {
  */
 const DAY_MUSCLE_MAP: Record<string, MuscleGroup[][]> = {
   "push/pull/legs": [
-    ["chest", "shoulders", "triceps"],          // Push
-    ["back", "biceps"],                         // Pull
-    ["legs", "glutes", "calves", "core"],       // Legs
+    ["chest", "shoulders", "triceps"],                              // Push
+    ["lats", "middle_back", "biceps", "traps"],                     // Pull
+    ["quads", "hamstrings", "glutes", "calves", "abs"],             // Legs
   ],
   "upper/lower": [
-    ["chest", "back", "shoulders", "biceps", "triceps"],    // Upper
-    ["legs", "glutes", "calves", "core"],                   // Lower
+    ["chest", "lats", "middle_back", "shoulders", "biceps", "triceps"],  // Upper
+    ["quads", "hamstrings", "glutes", "calves", "abs"],                  // Lower
   ],
   "full body": [
-    ["legs", "chest", "back", "shoulders", "core"], // single full body template
+    ["quads", "chest", "lats", "shoulders", "abs"], // single full body template
   ],
 };
 

@@ -149,7 +149,7 @@ function scoreEquipment(exercise: Exercise, userEquipment: Equipment[]): number 
 
   // Dumbbells are a reasonable substitute for many barbell movements
   if (
-    userEquipment.includes("dumbbells") &&
+    userEquipment.includes("dumbbell") &&
     exercise.equipment.includes("barbell")
   ) {
     return 1;
@@ -157,7 +157,7 @@ function scoreEquipment(exercise: Exercise, userEquipment: Equipment[]): number 
 
   // Bands are a partial substitute for cable
   if (
-    userEquipment.includes("bands") &&
+    userEquipment.includes("resistance_band") &&
     exercise.equipment.includes("cable")
   ) {
     return 1;

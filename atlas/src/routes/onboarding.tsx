@@ -45,7 +45,7 @@ function Onboarding() {
   const [p, setP] = useState<Profile>(existing ?? {
     age: 28, gender: "male", heightCm: 178, weightKg: 78,
     goal: "build muscle", experience: "intermediate",
-    equipment: ["dumbbells", "barbell", "machine", "cable"],
+    equipment: ["dumbbell", "barbell", "machine", "cable"],
     daysPerWeek: 4, durationMin: 60, style: "push/pull/legs",
     priorities: [], avoid: [], injuries: "",
     activity: "moderate", supplements: ["protein", "creatine"],

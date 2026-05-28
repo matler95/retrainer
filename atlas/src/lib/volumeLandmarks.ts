@@ -37,15 +37,31 @@ export interface VolumeLandmarks {
  * recovery capacity and training experience.
  */
 const MUSCLE_VOLUME_TABLE: Record<string, VolumeLandmarks> = {
+  // Primary muscle groups
   chest: { mev: 10, mav: 14, mrv: 18 },
-  back: { mev: 10, mav: 16, mrv: 20 },
   shoulders: { mev: 8, mav: 12, mrv: 16 },
-  legs: { mev: 12, mav: 18, mrv: 24 },
-  glutes: { mev: 10, mav: 14, mrv: 18 },
   biceps: { mev: 8, mav: 12, mrv: 16 },
   triceps: { mev: 8, mav: 12, mrv: 16 },
-  core: { mev: 8, mav: 12, mrv: 16 },
+  glutes: { mev: 10, mav: 14, mrv: 18 },
   calves: { mev: 6, mav: 10, mrv: 14 },
+  abs: { mev: 8, mav: 12, mrv: 16 },
+  forearms: { mev: 4, mav: 8, mrv: 12 },
+  neck: { mev: 2, mav: 4, mrv: 6 },
+  // Back sub-groups
+  lats: { mev: 8, mav: 14, mrv: 18 },
+  middle_back: { mev: 6, mav: 10, mrv: 14 },
+  lower_back: { mev: 4, mav: 8, mrv: 12 },
+  traps: { mev: 4, mav: 8, mrv: 12 },
+  // Leg sub-groups
+  quads: { mev: 10, mav: 16, mrv: 22 },
+  hamstrings: { mev: 8, mav: 12, mrv: 16 },
+  // Hip muscles
+  abductors: { mev: 4, mav: 8, mrv: 12 },
+  adductors: { mev: 4, mav: 8, mrv: 12 },
+  // Legacy aliases
+  back: { mev: 10, mav: 16, mrv: 20 },
+  legs: { mev: 12, mav: 18, mrv: 24 },
+  core: { mev: 8, mav: 12, mrv: 16 },
 };
 
 /**
