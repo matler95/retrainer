@@ -7,7 +7,7 @@ import { EXERCISES } from "@/data/exercises";
 import { goalCalories, proteinTargetG, waterTargetMl } from "@/lib/calc";
 import { coachOfTheDay } from "@/lib/trainer";
 import { useReadiness } from "@/hooks/useReadiness";
-import { Droplet, Pill, Plus, ChevronRight, Sparkles, Activity, Trophy, Flame, CalendarDays, Zap } from "lucide-react";
+import { Droplet, Pill, Plus, ChevronRight, Sparkles, Activity, Trophy, Flame, CalendarDays, Zap, Play, AlertTriangle } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 
 export const Route = createFileRoute("/")({
@@ -118,6 +118,7 @@ function Dashboard() {
   const supplements = useAppStore(s => s.supplements);
   const addWater = useAppStore(s => s.addWater);
   const toggleSupplement = useAppStore(s => s.toggleSupplement);
+  const activeWorkout = useAppStore(s => s.activeWorkout);
 
   useEffect(() => {
     if (!profile) navigate({ to: "/onboarding" });
@@ -148,7 +149,11 @@ function Dashboard() {
       .slice(0, 5);
   }, [exercisePRs]);
 
+  // Item 6: Dashboard state detection
   const isFirstTime = sessions.length === 0 && plan.length > 0;
+  const hasProfileButNoPlan = profile && plan.length === 0;
+  const hasActiveWorkout = activeWorkout !== null;
+  const resumeWorkoutDay = hasActiveWorkout ? plan.find(d => d.id === activeWorkout.dayId) : null;
 
   return (
     <AppShell>
@@ -161,6 +166,46 @@ function Dashboard() {
           <p className="text-sm leading-relaxed">{coachOfTheDay(profile, weekDone)}</p>
         </div>
       </Card>
+
+      {/* Item 6: Empty plan warning — profile exists but plan hasn't been generated */}
+      {hasProfileButNoPlan && (
+        <Card className="border-yellow-500/30 bg-yellow-500/5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="size-4 text-yellow-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">Plan not generated</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Your profile is set up but no workout plan exists yet.
+              </p>
+              <Button size="sm" className="mt-2" asChild>
+                <Link to="/onboarding">Complete setup</Link>
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Item 14: Resume workout card */}
+      {hasActiveWorkout && resumeWorkoutDay && (
+        <Card className="border-primary/30 bg-primary/5">
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-full bg-primary/10 grid place-items-center">
+              <Play className="size-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Workout in progress</p>
+              <p className="text-xs text-muted-foreground">
+                {resumeWorkoutDay.name} · {activeWorkout.exerciseIndex + 1}/{resumeWorkoutDay.exercises.length} exercises
+              </p>
+            </div>
+            <Button size="sm" className="rounded-full tap-scale" asChild>
+              <Link to="/workout/$dayId" params={{ dayId: activeWorkout.dayId }}>
+                Resume
+              </Link>
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* First-time dashboard experience */}
       {isFirstTime ? (
@@ -180,8 +225,8 @@ function Dashboard() {
         />
       ) : (
         <>
-          {/* Hero: Today's workout */}
-          {todayDay ? (
+          {/* Hero: Today's workout — only show if no active workout (to avoid duplicate CTAs) */}
+          {todayDay && !hasActiveWorkout && (
             <HeroCard>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
@@ -204,12 +249,6 @@ function Dashboard() {
                 </Button>
               </div>
             </HeroCard>
-          ) : (
-            <Card className="text-center py-6">
-              <CalendarDays className="size-6 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm font-medium">Rest day</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Recover and hydrate — you earned it.</p>
-            </Card>
           )}
 
           {/* Weekly momentum */}

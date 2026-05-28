@@ -161,12 +161,18 @@ function WorkoutSession() {
   const navigate = useNavigate();
   const day = useAppStore(s => s.plan.find(d => d.id === dayId));
   const saveSession = useAppStore(s => s.saveSession);
+  const units = useAppStore(s => s.units);
+  const activeWorkout = useAppStore(s => s.activeWorkout);
+  const setActiveWorkout = useAppStore(s => s.setActiveWorkout);
 
-  const [order, setOrder] = useState<number[]>(() =>
-    (day?.exercises ?? []).map((_, i) => i)
-  );
-  const [logs, setLogs] = useState<SessionExerciseLog[]>(() =>
-    (day?.exercises ?? []).map(pe => ({
+  // Item 13: Restore persisted session state or initialize fresh
+  const [order, setOrder] = useState<number[]>(() => {
+    if (activeWorkout?.dayId === dayId) return activeWorkout.order;
+    return (day?.exercises ?? []).map((_, i) => i);
+  });
+  const [logs, setLogs] = useState<SessionExerciseLog[]>(() => {
+    if (activeWorkout?.dayId === dayId) return activeWorkout.logs;
+    return (day?.exercises ?? []).map(pe => ({
       exerciseId: pe.exerciseId,
       sets: Array.from({ length: pe.sets }).map(() => ({
         reps: parseInt(pe.reps.split("-")[0]) || 0,
@@ -174,14 +180,23 @@ function WorkoutSession() {
         rpe: undefined,
         done: false,
       })),
-    }))
-  );
+    }));
+  });
 
-  const [activeIdx, setActiveIdx] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(() => {
+    if (activeWorkout?.dayId === dayId) return activeWorkout.exerciseIndex;
+    return 0;
+  });
   const [showList, setShowList] = useState(false);
   const [showSummary, setShowSummary] = useState<import("@/lib/sessionSummary").SessionSummary | null>(null);
-  const [sessionStartTime] = useState(() => Date.now());
-  const [lastFeedback, setLastFeedback] = useState<string | null>(null);
+  const [sessionStartTime] = useState(() => {
+    if (activeWorkout?.dayId === dayId) return new Date(activeWorkout.startedAt).getTime();
+    return Date.now();
+  });
+  const [lastFeedback, setLastFeedback] = useState<string | null>(() => {
+    if (activeWorkout?.dayId === dayId) return activeWorkout.lastFeedback;
+    return null;
+  });
 
   // Rest timer
   const [rest, setRest] = useState<number | null>(null);
@@ -202,6 +217,22 @@ function WorkoutSession() {
     }, 1000);
     return () => { if (restRef.current) clearInterval(restRef.current); };
   }, [rest !== null]);
+
+  // Item 13: Persist session state to store whenever it changes
+  useEffect(() => {
+    if (!day) return;
+    setActiveWorkout({
+      dayId,
+      startedAt: new Date(sessionStartTime).toISOString(),
+      exerciseIndex: activeIdx,
+      logs,
+      order,
+      lastFeedback,
+    });
+  }, [dayId, activeIdx, logs, order, lastFeedback, sessionStartTime, day]);
+
+  // Clear active workout when session is completed
+  const clearActiveWorkout = () => setActiveWorkout(null);
 
   if (!day) {
     return (
@@ -226,6 +257,17 @@ function WorkoutSession() {
     (logs.reduce((acc, l) => acc + l.sets.filter(s => s.done).length, 0) /
       Math.max(1, logs.reduce((acc, l) => acc + l.sets.length, 0))) * 100
   );
+
+  // Item 15: Next exercise info for header display
+  const nextExerciseIdx = order.find((ei, i) => i > activeIdx && !logs[ei].sets.every(s => s.done));
+  const nextExercise = nextExerciseIdx !== undefined ? EXERCISES.find(e => e.id === logs[nextExerciseIdx].exerciseId) : null;
+  const nextExerciseSetsRemaining = nextExerciseIdx !== undefined
+    ? logs[nextExerciseIdx].sets.filter(s => !s.done).length
+    : 0;
+
+  // Item 3: Unit-aware weight display
+  const weightUnit = units === "lb" ? "lb" : "kg";
+  const weightStep = units === "lb" ? 5 : 2.5;
 
   const setSet = (ei: number, si: number, patch: Partial<SetLog>) => {
     setLogs(prev => prev.map((l, i) => i === ei ? {
@@ -330,6 +372,7 @@ function WorkoutSession() {
     const summary = computeSessionSummary(session, day.exercises, sessions);
     setShowSummary(summary);
     saveSession(session);
+    clearActiveWorkout();
   };
 
   const handleSummaryFinish = (tags: SessionTag[]) => {
@@ -344,7 +387,7 @@ function WorkoutSession() {
         const allHitTarget = doneSets.every(s => s.reps >= parseInt(plan.reps.split("-").pop() || "0"));
         if (allHitTarget) {
           const inc = (doneSets[0]?.weight ?? 20) >= 60 ? 2.5 : 1;
-          return { message: `All reps hit! Try +${inc}kg next session.` };
+          return { message: `All reps hit! Try +${inc}${weightUnit} next session.` };
         }
         return { message: "Solid effort. Aim for top of rep range next time." };
       })()
@@ -388,6 +431,17 @@ function WorkoutSession() {
           <span>{overallProgress}%</span>
         </div>
       </div>
+
+      {/* Item 15: Next exercise hint */}
+      {nextExercise && !exerciseDone && (
+        <div className="app-shell w-full px-4 mt-2">
+          <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+            <span className="opacity-60">Next:</span>
+            <span className="font-medium text-foreground/70">{nextExercise.name}</span>
+            <span className="opacity-60">· {nextExerciseSetsRemaining} sets remaining</span>
+          </div>
+        </div>
+      )}
 
       {/* Exercise list overlay */}
       {showList && (
@@ -476,8 +530,8 @@ function WorkoutSession() {
               <Stepper
                 label="Weight"
                 value={activeSet.weight}
-                unit="kg"
-                step={2.5}
+                unit={weightUnit}
+                step={weightStep}
                 min={0}
                 inputMode="decimal"
                 onChange={v => setSet(exerciseIndex, setBeingLogged, { weight: v })}

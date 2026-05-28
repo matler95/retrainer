@@ -9,7 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Sparkles, Heart, Target, Dumbbell, Calendar, Flame, Droplet, Activity as ActivityIcon, History, Moon, CheckCircle2 } from "lucide-react";
+import {
+  ChevronLeft, Sparkles, Heart, Target, Dumbbell, Calendar, Flame,
+  Droplet, Activity as ActivityIcon, History, Moon, CheckCircle2, ArrowRight,
+} from "lucide-react";
 
 export const Route = createFileRoute("/onboarding")({
   component: Onboarding,
@@ -52,6 +55,7 @@ function Onboarding() {
   const existing = useAppStore(s => s.profile);
 
   const [step, setStep] = useState(0);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [p, setP] = useState<Profile>(existing ?? {
     age: 28, gender: "male", heightCm: 178, weightKg: 78,
     goal: "build muscle", experience: "intermediate",
@@ -65,7 +69,8 @@ function Onboarding() {
   const update = <K extends keyof Profile>(k: K, v: Profile[K]) => setP(prev => ({ ...prev, [k]: v }));
   const toggleArr = <T,>(arr: T[], v: T): T[] => arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
 
-  const steps: { title: string; subtitle: string; icon: React.ReactNode; why: string; body: React.ReactNode }[] = [
+  // ── Essential steps (core setup) ───────────────────────────────────
+  const essentialSteps: { title: string; subtitle: string; icon: React.ReactNode; why: string; body: React.ReactNode }[] = [
     /* ── 0  Welcome ─────────────────────────────────────────────── */
     {
       title: "Welcome to Coach",
@@ -180,7 +185,11 @@ function Onboarding() {
         </div>
       ),
     },
-    /* ── 6  Prioritize & avoid ──────────────────────────────────── */
+  ];
+
+  // ── Advanced steps (optional) ─────────────────────────────────────
+  const advancedSteps: { title: string; subtitle: string; icon: React.ReactNode; why: string; body: React.ReactNode }[] = [
+    /* ── A0  Prioritize & avoid ──────────────────────────────────── */
     {
       title: "Prioritize & avoid",
       subtitle: "Fine-tune your plan (optional).",
@@ -203,7 +212,7 @@ function Onboarding() {
         </div>
       ),
     },
-    /* ── 7  Hydration & supplements ─────────────────────────────── */
+    /* ── A1  Hydration & supplements ─────────────────────────────── */
     {
       title: "Hydration & supplements",
       subtitle: "We'll track these on your dashboard.",
@@ -226,7 +235,7 @@ function Onboarding() {
         </div>
       ),
     },
-    /* ── 8  Movement + Training history ─────────────────────────── */
+    /* ── A2  Movement + Training history ─────────────────────────── */
     {
       title: "Movement & history",
       subtitle: "Helps us choose the right exercises and starting weights.",
@@ -288,7 +297,7 @@ function Onboarding() {
         </div>
       ),
     },
-    /* ── 9  Recovery profile + Lifestyle ────────────────────────── */
+    /* ── A3  Recovery profile + Lifestyle ────────────────────────── */
     {
       title: "Recovery & lifestyle",
       subtitle: "Affects readiness scoring and volume recommendations.",
@@ -330,51 +339,93 @@ function Onboarding() {
         </div>
       ),
     },
-    /* ── 10  Review ─────────────────────────────────────────────── */
-    {
-      title: "Review your plan",
-      subtitle: "Here's what we'll build for you.",
-      icon: <CheckCircle2 className="size-5 text-accent" />,
-      why: "",
-      body: (
-        <div className="space-y-4">
-          {/* Plan summary */}
-          <div className="rounded-2xl bg-accent/5 border border-accent/20 p-4">
-            <p className="text-sm leading-relaxed">
-              A <strong>{p.style}</strong> routine for <strong>{p.goal}</strong>, training{" "}
-              <strong>{p.daysPerWeek}×</strong> per week for <strong>{p.durationMin} min</strong> sessions.
-              {p.priorities.length > 0 && ` Emphasizing ${p.priorities.join(", ")}.`}
-            </p>
-          </div>
-
-          {/* Detail rows */}
-          <div className="space-y-0">
-            <Row k="Goal" v={p.goal} why="Determines rep ranges, rest periods, and intensity" />
-            <Row k="Experience" v={p.experience} why="Sets starting volume and exercise complexity" />
-            <Row k="Schedule" v={`${p.daysPerWeek}× / week · ${p.durationMin} min`} why="Distributes training across the week" />
-            <Row k="Style" v={p.style} why="Structures muscle group pairing" />
-            <Row k="Equipment" v={p.equipment.join(", ")} why="Limits exercise pool to what you have" />
-            {p.priorities.length > 0 && <Row k="Priority" v={p.priorities.join(", ")} why="Extra volume for focused growth" />}
-            {p.avoid.length > 0 && <Row k="Avoid" v={p.avoid.join(", ")} why="Excluded from all programming" />}
-            <Row k="Supplements" v={p.supplements.join(", ") || "none"} why="Tracked on your dashboard" />
-            {p.movementAssessment && <Row k="Mobility" v={`Squat: ${p.movementAssessment.canSquatBelowParallel ? "yes" : "no"}, Shoulders: ${p.movementAssessment.shoulderMobility}`} why="Informs exercise substitutions" />}
-            {p.trainingHistory && <Row k="History" v={`${p.trainingHistory.yearsTraining}yr, ${(p.trainingHistory.previousPrograms ?? []).join(", ") || "none"}`} why="Guides starting weight estimates" />}
-            {p.recoveryProfile && <Row k="Recovery" v={`${p.recoveryProfile.sleepHoursAvg}h sleep, stress ${p.recoveryProfile.stressLevel}/5`} why="Adjusts volume for recovery capacity" />}
-          </div>
-        </div>
-      ),
-    },
   ];
 
-  const current = steps[step];
-  const isLast = step === steps.length - 1;
+  // ── All steps combined for display ────────────────────────────────
+  const allSteps = [...essentialSteps, ...advancedSteps];
+  const essentialCount = essentialSteps.length;
+  const advancedCount = advancedSteps.length;
+  const totalSteps = showAdvanced ? allSteps.length : essentialCount;
+  const isAdvancedMode = step >= essentialCount;
+  const currentStep = showAdvanced ? allSteps[step] : essentialSteps[step];
+  const isLast = step === totalSteps - 1;
   const isFirst = step === 0;
-  const progress = ((step + 1) / steps.length) * 100;
+
+  // Progress calculation: essential steps only, or all steps if advanced
+  const progress = ((step + 1) / totalSteps) * 100;
 
   const finish = () => {
     setProfile(p);
     navigate({ to: "/plan" });
   };
+
+  // ── Summary page with jump links ──────────────────────────────────
+  const renderSummary = () => (
+    <div className="space-y-4">
+      {/* Plan summary */}
+      <div className="rounded-2xl bg-accent/5 border border-accent/20 p-4">
+        <p className="text-sm leading-relaxed">
+          A <strong>{p.style}</strong> routine for <strong>{p.goal}</strong>, training{" "}
+          <strong>{p.daysPerWeek}×</strong> per week for <strong>{p.durationMin} min</strong> sessions.
+          {p.priorities.length > 0 && ` Emphasizing ${p.priorities.join(", ")}.`}
+        </p>
+      </div>
+
+      {/* Detail rows with jump links */}
+      <div className="space-y-0">
+        <SummaryRow k="Goal" v={p.goal} why="Determines rep ranges, rest periods, and intensity" jumpTo={() => { setStep(1); setShowAdvanced(false); }} />
+        <SummaryRow k="Experience" v={p.experience} why="Sets starting volume and exercise complexity" jumpTo={() => { setStep(2); setShowAdvanced(false); }} />
+        <SummaryRow k="Schedule" v={`${p.daysPerWeek}× / week · ${p.durationMin} min`} why="Distributes training across the week" jumpTo={() => { setStep(5); setShowAdvanced(false); }} />
+        <SummaryRow k="Style" v={p.style} why="Structures muscle group pairing" jumpTo={() => { setStep(5); setShowAdvanced(false); }} />
+        <SummaryRow k="Equipment" v={p.equipment.join(", ")} why="Limits exercise pool to what you have" jumpTo={() => { setStep(4); setShowAdvanced(false); }} />
+        {p.priorities.length > 0 && <SummaryRow k="Priority" v={p.priorities.join(", ")} why="Extra volume for focused growth" jumpTo={() => { setStep(essentialCount); setShowAdvanced(true); }} />}
+        {p.avoid.length > 0 && <SummaryRow k="Avoid" v={p.avoid.join(", ")} why="Excluded from all programming" jumpTo={() => { setStep(essentialCount); setShowAdvanced(true); }} />}
+        <SummaryRow k="Supplements" v={p.supplements.join(", ") || "none"} why="Tracked on your dashboard" jumpTo={() => { setStep(essentialCount + 1); setShowAdvanced(true); }} />
+        {p.movementAssessment && <SummaryRow k="Mobility" v={`Squat: ${p.movementAssessment.canSquatBelowParallel ? "yes" : "no"}, Shoulders: ${p.movementAssessment.shoulderMobility}`} why="Informs exercise substitutions" jumpTo={() => { setStep(essentialCount + 2); setShowAdvanced(true); }} />}
+        {p.trainingHistory && <SummaryRow k="History" v={`${p.trainingHistory.yearsTraining}yr, ${(p.trainingHistory.previousPrograms ?? []).join(", ") || "none"}`} why="Guides starting weight estimates" jumpTo={() => { setStep(essentialCount + 2); setShowAdvanced(true); }} />}
+        {p.recoveryProfile && <SummaryRow k="Recovery" v={`${p.recoveryProfile.sleepHoursAvg}h sleep, stress ${p.recoveryProfile.stressLevel}/5`} why="Adjusts volume for recovery capacity" jumpTo={() => { setStep(essentialCount + 3); setShowAdvanced(true); }} />}
+      </div>
+    </div>
+  );
+
+  // ── Between essential and advanced: summary + choice screen ──────
+  const renderAdvancedChoice = () => (
+    <div className="space-y-6">
+      <div className="rounded-2xl bg-accent/5 border border-accent/20 p-4">
+        <p className="text-sm leading-relaxed">
+          Your plan is ready with the essentials! You can <strong>generate it now</strong> or
+          add advanced preferences to fine-tune your training.
+        </p>
+      </div>
+
+      {/* Quick summary of what's set */}
+      <div className="space-y-0">
+        <SummaryRow k="Goal" v={p.goal} />
+        <SummaryRow k="Experience" v={p.experience} />
+        <SummaryRow k="Schedule" v={`${p.daysPerWeek}× / week · ${p.durationMin} min`} />
+        <SummaryRow k="Style" v={p.style} />
+        <SummaryRow k="Equipment" v={p.equipment.join(", ")} />
+      </div>
+
+      {/* Advanced options preview */}
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Optional advanced settings</p>
+        <div className="space-y-2">
+          {[
+            { icon: <Flame className="size-4 text-accent" />, label: "Prioritize muscles & avoid exercises" },
+            { icon: <Droplet className="size-4 text-accent" />, label: "Hydration & supplement tracking" },
+            { icon: <ActivityIcon className="size-4 text-accent" />, label: "Movement assessment & training history" },
+            { icon: <Moon className="size-4 text-accent" />, label: "Recovery & lifestyle profile" },
+          ].map((item, i) => (
+            <div key={i} className="flex items-center gap-3 text-sm text-muted-foreground">
+              {item.icon}
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="app-shell min-h-dvh px-4 safe-pt pb-32 flex flex-col">
@@ -383,7 +434,15 @@ function Onboarding() {
         <header className="flex items-center gap-3 py-3">
           {step > 0 ? (
             <button
-              onClick={() => setStep(s => s - 1)}
+              onClick={() => {
+                if (showAdvanced && step === essentialCount) {
+                  // Going back from first advanced step to essential summary
+                  setShowAdvanced(false);
+                  setStep(essentialCount - 1);
+                } else {
+                  setStep(s => s - 1);
+                }
+              }}
               className="size-10 grid place-items-center rounded-full bg-card border border-border tap-scale"
               aria-label="Go back"
             >
@@ -393,7 +452,7 @@ function Onboarding() {
           <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-accent transition-all" style={{ width: `${progress}%` }} />
           </div>
-          <div className="text-xs tabular-nums text-muted-foreground">{step + 1}/{steps.length}</div>
+          <div className="text-xs tabular-nums text-muted-foreground">{step + 1}/{totalSteps}</div>
         </header>
       )}
 
@@ -401,32 +460,71 @@ function Onboarding() {
       <div className="mt-4 flex-1">
         {isFirst && (
           <div className="flex items-center gap-2 mb-6">
-            {current.icon}
+            {currentStep.icon}
           </div>
         )}
-        <h1 className={cn("font-bold tracking-tight", isFirst ? "text-4xl" : "text-3xl")}>{current.title}</h1>
-        <p className="text-sm text-muted-foreground mt-1">{current.subtitle}</p>
+        <h1 className={cn("font-bold tracking-tight", isFirst ? "text-4xl" : "text-3xl")}>{currentStep.title}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{currentStep.subtitle}</p>
 
         {/* "Why this matters" hint */}
-        {current.why && (
+        {currentStep.why && (
           <p className="text-xs text-muted-foreground mt-3 bg-muted/40 rounded-xl px-3 py-2 border border-border/50">
-            💡 {current.why}
+            💡 {currentStep.why}
           </p>
         )}
 
-        <div className="mt-6">{current.body}</div>
+        <div className="mt-6">{currentStep.body}</div>
       </div>
 
       {/* Bottom action */}
       <div className="fixed bottom-0 inset-x-0 bg-background border-t border-border safe-pb">
-        <div className="app-shell px-4 py-3">
-          <Button
-            size="lg"
-            className="w-full rounded-full text-base tap-scale"
-            onClick={() => isLast ? finish() : setStep(s => s + 1)}
-          >
-            {isFirst ? "Let's get started" : isLast ? "Generate my plan" : "Continue"}
-          </Button>
+        <div className="app-shell px-4 py-3 space-y-2">
+          {/* Primary action */}
+          {isFirst ? (
+            <Button
+              size="lg"
+              className="w-full rounded-full text-base tap-scale"
+              onClick={() => setStep(s => s + 1)}
+            >
+              Let's get started
+            </Button>
+          ) : isAdvancedMode && isLast ? (
+            // Last advanced step → generate
+            <Button
+              size="lg"
+              className="w-full rounded-full text-base tap-scale"
+              onClick={finish}
+            >
+              Generate my plan
+            </Button>
+          ) : step === essentialCount - 1 && !showAdvanced ? (
+            // Last essential step → show advanced choice
+            <>
+              <Button
+                size="lg"
+                className="w-full rounded-full text-base tap-scale"
+                onClick={finish}
+              >
+                <CheckCircle2 className="size-5" /> Generate plan with essentials
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full rounded-full text-base tap-scale"
+                onClick={() => { setShowAdvanced(true); setStep(essentialCount); }}
+              >
+                <ArrowRight className="size-4" /> Add advanced preferences
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="lg"
+              className="w-full rounded-full text-base tap-scale"
+              onClick={() => setStep(s => s + 1)}
+            >
+              Continue
+            </Button>
+          )}
         </div>
       </div>
     </div>
@@ -454,5 +552,26 @@ function Row({ k, v, why }: { k: string; v: string; why?: string }) {
       </div>
       {why && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{why}</p>}
     </div>
+  );
+}
+
+function SummaryRow({ k, v, why, jumpTo }: { k: string; v: string; why?: string; jumpTo?: () => void }) {
+  return (
+    <button
+      className={cn(
+        "w-full py-2.5 border-b border-border/50 last:border-0 text-left",
+        jumpTo && "tap-scale hover:bg-muted/30 rounded-lg px-2 -mx-2 transition-colors"
+      )}
+      onClick={jumpTo}
+    >
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground capitalize text-sm">{k}</span>
+        <span className="font-medium text-right capitalize text-sm flex items-center gap-1">
+          {v}
+          {jumpTo && <ChevronLeft className="size-3 rotate-180 opacity-40" />}
+        </span>
+      </div>
+      {why && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{why}</p>}
+    </button>
   );
 }

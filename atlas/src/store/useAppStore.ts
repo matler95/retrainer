@@ -79,6 +79,10 @@ interface AppState {
   /** Weekly check-in history */
   weeklyCheckins: WeeklyCheckin[];
 
+  // ── Active Workout Session (persisted) ──
+  /** Currently in-progress workout session, or null */
+  activeWorkout: ActiveWorkout | null;
+
   // ── Sync ──
   /** Timestamp of last successful Supabase sync */
   lastSyncedAt: string | null;
@@ -108,7 +112,20 @@ interface AppState {
   addExercisePR: (pr: ExercisePR) => void;
   /** Add weekly check-in */
   addWeeklyCheckin: (c: WeeklyCheckin) => void;
+  /** Save active workout session state for persistence */
+  setActiveWorkout: (w: ActiveWorkout | null) => void;
   reset: () => void;
+}
+
+// ─── Active Workout Session ─────────────────────────────────────────────────
+
+export interface ActiveWorkout {
+  dayId: string;
+  startedAt: string;
+  exerciseIndex: number;
+  logs: SessionExerciseLog[];
+  order: number[];
+  lastFeedback: string | null;
 }
 
 // ─── Store ──────────────────────────────────────────────────────────────────
@@ -140,6 +157,9 @@ export const useAppStore = create<AppState>()(
       bodyMetrics: [],
       exercisePRs: [],
       weeklyCheckins: [],
+
+      // ── Active workout ──
+      activeWorkout: null,
 
       // ── Sync ──
       lastSyncedAt: null,
@@ -305,6 +325,8 @@ export const useAppStore = create<AppState>()(
       addWeeklyCheckin: (c) =>
         set({ weeklyCheckins: [...get().weeklyCheckins, c] }),
 
+      setActiveWorkout: (activeWorkout) => set({ activeWorkout }),
+
       reset: () =>
         set({
           profile: null,
@@ -319,6 +341,7 @@ export const useAppStore = create<AppState>()(
           achievements: [],
           currentWeekNumber: 0,
           trainingBlocks: [],
+          activeWorkout: null,
           lastSyncedAt: null,
         }),
     }),
