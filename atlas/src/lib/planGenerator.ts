@@ -214,13 +214,19 @@ export function generateEnhancedPlan(
       neededMuscles,
     );
 
-    // Calculate target sets based on volume landmarks
+    // Calculate target sets per exercise based on volume landmarks.
+    // Landmarks represent WEEKLY volume for the muscle group, not per-exercise.
+    // We divide by the number of exercises for this muscle to get per-exercise sets,
+    // then clamp to a reasonable range (2-5 sets).
     const landmarks = getVolumeLandmarks(muscle);
-    // Target is between MEV and MAV, adjusted by setCountModifier
-    const targetSets = Math.max(
-      2,
-      Math.round((landmarks.mev + (landmarks.mav - landmarks.mev) * 0.5) * setModifier),
+    const weeklyTarget = Math.round(
+      (landmarks.mev + (landmarks.mav - landmarks.mev) * 0.5) * setModifier
     );
+    const perExerciseSets = Math.max(
+      2,
+      Math.min(5, Math.round(weeklyTarget / Math.max(count, 1))),
+    );
+    const targetSets = perExerciseSets;
 
     return picked.map((e) => ({
       exerciseId: e.id,

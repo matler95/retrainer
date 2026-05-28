@@ -56,6 +56,7 @@ function Onboarding() {
 
   const [step, setStep] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [p, setP] = useState<Profile>(existing ?? {
     age: 28, gender: "male", heightCm: 178, weightKg: 78,
     goal: "build muscle", experience: "intermediate",
@@ -199,7 +200,7 @@ function Onboarding() {
                 <div className="text-xs text-muted-foreground">kg</div>
               </div>
             </div>
-            <Slider min={40} max={150} step={0.5} value={[p.weightKg]} onValueChange={([v]) => update("weightKg", v)} />
+            <Slider min={40} max={150} step={1} value={[p.weightKg]} onValueChange={([v]) => update("weightKg", v)} />
             <div className="flex justify-between text-xs text-muted-foreground px-1">
               <span>40 kg</span>
               <span>150 kg</span>
@@ -467,8 +468,15 @@ function Onboarding() {
   const progress = ((step + 1) / totalSteps) * 100;
 
   const finish = () => {
-    setProfile(p);
-    navigate({ to: "/plan" });
+    setPlanError(null);
+    try {
+      setProfile(p);
+      navigate({ to: "/plan" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to generate plan";
+      console.error("Plan generation error:", err);
+      setPlanError(msg);
+    }
   };
 
   // ── Summary page with jump links ──────────────────────────────────
@@ -587,6 +595,16 @@ function Onboarding() {
 
         <div className="mt-6">{currentStep.body}</div>
       </div>
+
+      {/* Error banner */}
+      {planError && (
+        <div className="fixed bottom-28 inset-x-0 px-4 z-50">
+          <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-xl px-4 py-3 app-shell">
+            <p className="font-medium">Plan generation failed</p>
+            <p className="text-xs mt-1 opacity-80">{planError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Bottom action */}
       <div className="fixed bottom-0 inset-x-0 bg-background border-t border-border safe-pb">
